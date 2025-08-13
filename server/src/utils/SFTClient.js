@@ -14,13 +14,23 @@ export class SFTClient {
         console.log(`SFTClient - Sending request:`, requestBody);
         
         try {
+            // Add timeout protection
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                console.error(`SFTClient - Request timeout after 30 seconds`);
+                controller.abort();
+            }, 30000); // 30 second timeout
+
             const response = await fetch(`${this.baseUrl}/process_message`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
     
             if (!response.ok) {
                 const errorText = await response.text();
@@ -31,6 +41,10 @@ export class SFTClient {
             const data = await response.json();
             return data.response.choices[0].message.content;
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error('SFTClient - Request aborted due to timeout');
+                throw new Error('Request timeout after 30 seconds');
+            }
             console.error('SFTClient - Error:', error);
             throw error;
         }
@@ -38,6 +52,13 @@ export class SFTClient {
 
     async initAgent(agentName, sessionId, userId) {
         try {
+            // Add timeout protection
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                console.error(`SFTClient - Init request timeout after 15 seconds`);
+                controller.abort();
+            }, 15000); // 15 second timeout for init
+
             const response = await fetch(`${this.baseUrl}/init`, {
                 method: 'POST',
                 headers: {
@@ -48,8 +69,11 @@ export class SFTClient {
                     agent_name: agentName,
                     session_id: sessionId,
                     user_id: userId
-                })
+                }),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
     
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -57,6 +81,10 @@ export class SFTClient {
     
             return await response.json();
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error('SFTClient - Init request aborted due to timeout');
+                throw new Error('Init request timeout after 15 seconds');
+            }
             console.error('SFTClient init error:', error);
             throw error;
         }

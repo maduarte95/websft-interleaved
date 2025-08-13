@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { usePlayer, useRound, useStage } from "@empirica/core/player/classic/react";
+import { usePlayer, useRound, useStage, useStageTimer } from "@empirica/core/player/classic/react";
 import { Button } from "../components/Button";
 import { TimeProgressBar } from "../components/TimeProgressBar";
 
@@ -10,6 +10,7 @@ export function VerbalFluencyCollab() {
   const player = usePlayer();
   const round = useRound();
   const stage = useStage();
+  const timer = useStageTimer();
   const category = player.round.get("category");
   const inputRef = useRef(null);
   const wordHistoryRef = useRef(null);
@@ -25,30 +26,16 @@ export function VerbalFluencyCollab() {
   // NEW: Synchronous submission lock
   const isSubmittingRef = useRef(false);
 
-  //get client side time with offset
-  const [clientTimeOffset, setClientTimeOffset] = useState(0);
-
   // Text normalization function
   const normalizeString = (str) => {
     return str.trim().toLowerCase().replace(/[\s\-',.]+/g, ''); // Remove spaces, hyphens, apostrophes, commas, periods and convert to lowercase
   };
   
-  // Wait for serverStartTime before rendering interactive elements //issue - this is not synchronized! will lead to negative timestamps!
+  // Wait for serverStartTime before rendering interactive elements
   const serverStartTime = stage.get("serverStartTime");
   if (!serverStartTime) {
     return <div>Loading...</div>;
   }
-  
-  // Calculate and store the time offset when component mounts
-  useEffect(() => {
-    if (serverStartTime) {
-      const clientTime = Date.now();
-      // Calculate how much the client time needs to be adjusted to match server time
-      const offset = serverStartTime - clientTime;
-      setClientTimeOffset(offset);
-      console.log(`Time offset calculated: ${offset}ms (client: ${clientTime}, server: ${serverStartTime}) for stage ${stage.get("name")}`);
-    }
-  }, [serverStartTime]);
 
   // Add effect to scroll to the bottom of word history
   useEffect(() => {
@@ -57,20 +44,16 @@ export function VerbalFluencyCollab() {
     }
   }, [player.round.get("words")]);
   
-  // Get a timestamp adjusted to match server time
-  // function getAdjustedTimestamp() {
-  //   return Date.now() + clientTimeOffset;
-  // }
-
-  //debug - just use client time - seems to work
-  function getAdjustedTimestamp() {
-    return Date.now()
-  }
-  
-  // Get a timestamp relative to stage start
+  // Get a timestamp relative to stage start using stage timer
   function getRelativeTimestamp() {
-    const adjustedNow = getAdjustedTimestamp();
-    return Math.max(0, adjustedNow - serverStartTime);
+    if (!timer) {
+      throw new Error("Stage timer not available");
+    }
+    
+    const stageDuration = stage.get("duration") * 1000; // Convert to ms
+    const elapsedTime = stageDuration - timer.remaining;
+    
+    return Math.max(0, elapsedTime);
   }
 
   //Show progress bar in first render
@@ -120,38 +103,6 @@ export function VerbalFluencyCollab() {
     }
   }, [player.stage.get("apiError")]);
 
-async function getServerTimestamp() {
-  console.log(`[Player ${player.id}] Requesting server timestamp for stage ${stage.get("name")}`);
-  
-  // Clear existing timestamp
-  await player.stage.set("serverTimestamp", undefined);
-  console.log(`[Player ${player.id}] Cleared existing timestamp`);
-  
-  // Set request flag
-  await player.set("requestTimestamp", true);
-  console.log(`[Player ${player.id}] Set request flag`);
-
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    const maxAttempts = 300;
-    
-    const checkTimestamp = () => {
-      attempts++;
-      const timestamp = player.stage.get("serverTimestamp");
-      console.log(`[Player ${player.id}] Check attempt ${attempts}: timestamp=${timestamp}`);
-      
-      if (timestamp) {
-        resolve(timestamp);
-      } else if (attempts >= maxAttempts) {
-        reject(new Error(`Failed to get timestamp after ${maxAttempts} attempts`));
-      } else {
-        setTimeout(checkTimestamp, 100);
-      }
-    };
-    
-    checkTimestamp();
-  });
-}
 
   async function handleSendWord() {
 
@@ -188,24 +139,16 @@ async function getServerTimestamp() {
       setIsWaitingForAI(true);
       console.log(`[Player ${player.id}] Starting word submission`);
 
-      // const timestamp = await getServerTimestamp();
-      // if (!timestamp) {
-      //   throw new Error("No timestamp received");
-      // }
-
-      //const timestamp = Date.now();
-        
+      const serverStartTime = stage.get("serverStartTime");
       if (!serverStartTime) {
         throw new Error("No server start time available");
       }
 
-      // const relativeTimestamp = timestamp - serverStartTime;
-      // if (relativeTimestamp < 0) {
-      //   throw new Error(`Invalid relative timestamp: ${relativeTimestamp}`);
-      // }
-
       const timestamp = getRelativeTimestamp();
-      console.log(`[Player ${player.id}] Got relative timestamp for player word: ${timestamp}`);
+      const clientTimestamp = Date.now();
+      const clientRelativeTimestamp = clientTimestamp - serverStartTime;
+      
+      console.log(`[Player ${player.id}] Got timestamps - stage timer: ${timestamp}ms, client relative: ${clientRelativeTimestamp}ms`);
 
 
       // Check if player took too long to respond to the last word
@@ -235,7 +178,8 @@ async function getServerTimestamp() {
         text: wordToSubmit,
         source: 'user',
         timestamp: timestamp,
-        absoluteTimestamp: Date.now()
+        clientTimestamp: clientTimestamp,
+        clientRelativeTimestamp: clientRelativeTimestamp,
       }];
  
       player.round.set("words", updatedWords); //await removed since it does nothing to this type of expression
@@ -277,18 +221,6 @@ async function getServerTimestamp() {
             return;
         }
 
-        // Get and validate timestamp before any state changes
-        // const timestamp = await getServerTimestamp();
-        // if (!timestamp) {
-        //     throw new Error("Failed to get timestamp for AI request");
-        // }
-        // const timestamp = Date.now();
-
-        // const relativeTimestamp = timestamp - serverStartTime;
-        // if (relativeTimestamp < 0) {
-        //     throw new Error("Invalid relative timestamp");
-        // }
-
         const relativeTimestamp = getRelativeTimestamp();
         console.log(`[Player ${player.id}] Relative timestamp for AI request: ${relativeTimestamp}`);
 
@@ -326,19 +258,20 @@ async function getServerTimestamp() {
     console.log("Handling AI response:", response);
     pendingResponseRef.current = false;
 
-    const clientTimestamp = getAdjustedTimestamp();
-    // console.log("Client-side absolute timestamp:", clientTimestamp);
-    const clientrelativeTimestamp = getRelativeTimestamp();
-    // console.log("Client-side relative timestamp:", clientrelativeTimestamp);
+    const timestamp = getRelativeTimestamp();
+    const clientTimestamp = Date.now();
+    const serverStartTime = stage.get("serverStartTime");
+    const clientRelativeTimestamp = clientTimestamp - serverStartTime;
 
     const words = player.round.get("words") || [];
     const updatedWords = [...words, { 
       text: response.text, 
       source: 'ai', 
-      timestampServer: response.timestamp - serverStartTime, //timestamp from server
-      timestampClient: clientrelativeTimestamp,
-      absoluteTimestampServer: response.timestamp,
-      absoluteTimestampClient: clientTimestamp,
+      timestamp: timestamp, // stage timer elapsed time
+      clientTimestamp: clientTimestamp, // absolute client time
+      clientRelativeTimestamp: clientRelativeTimestamp, // client-based elapsed time
+      serverTimestamp: response.timestamp, // absolute server time
+      serverRelativeTimestamp: response.timestamp - serverStartTime, // server-based elapsed time
       apiLatency: response.apiLatency,
     }];
 

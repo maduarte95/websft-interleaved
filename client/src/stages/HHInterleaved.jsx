@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { usePlayer, usePlayers, useRound, useStage } from "@empirica/core/player/classic/react";
+import { usePlayer, usePlayers, useRound, useStage, useStageTimer } from "@empirica/core/player/classic/react";
 import { Button } from "../components/Button";
 import { TimeProgressBar } from "../components/TimeProgressBar";
 
@@ -12,6 +12,7 @@ export function HHInterleaved() {
   const otherPlayer = players.find(p => p.id !== player.id);
   const isPlayerTurn = round.get("currentTurnPlayerId") === player.id;
   const stage = useStage();
+  const timer = useStageTimer();
   const category = player.round.get("category");
   player.round.set("roundName", "InterleavedHH");
   const inputRef = useRef(null);
@@ -94,37 +95,17 @@ export function HHInterleaved() {
   }, [round.get("words"), player.id]); 
 
 
-  async function getServerTimestamp() {
-    console.log(`[Player ${player.id}] Requesting server timestamp for stage ${stage.get("name")}`);
+  function getStageTimestamp() {
+    if (!timer) {
+      throw new Error("Stage timer not available");
+    }
     
-    // Clear existing timestamp
-    player.stage.set("serverTimestamp", undefined);
-    console.log(`[Player ${player.id}] Cleared existing timestamp`);
+    const stageDuration = stage.get("duration") * 1000; // Convert to ms
+    const elapsedTime = stageDuration - timer.remaining;
     
-    // Set request flag for server timestamp
-    player.set("requestTimestamp", true);
-    console.log(`[Player ${player.id}] Set request flag`);
-  
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 20;
-      
-      const checkTimestamp = () => {
-        attempts++;
-        const timestamp = player.stage.get("serverTimestamp");
-        console.log(`[Player ${player.id}] Check attempt ${attempts}: timestamp=${timestamp}`);
-        
-        if (timestamp) {
-          resolve(timestamp);
-        } else if (attempts >= maxAttempts) {
-          reject(new Error(`Failed to get timestamp after ${maxAttempts} attempts`));
-        } else {
-          setTimeout(checkTimestamp, 100);
-        }
-      };
-      
-      checkTimestamp();
-    });
+    console.log(`[Player ${player.id}] Stage timer timestamp - elapsed: ${elapsedTime}ms`);
+    
+    return elapsedTime;
   }
 
 
@@ -161,21 +142,20 @@ export function HHInterleaved() {
   
       console.log(`[Player ${player.id}] Starting word submission`);
   
-      const timestamp = await getServerTimestamp();
-      if (!timestamp) {
-        throw new Error("No server timestamp received");
+      const timestamp = getStageTimestamp();
+      if (timestamp < 0) {
+        throw new Error(`Invalid timestamp: ${timestamp}`);
       }
   
-      console.log(`[Player ${player.id}] Got timestamp from server: ${timestamp}`);
+      console.log(`[Player ${player.id}] Got stage timer timestamp: ${timestamp}ms`);
       
+      const serverStartTime = stage.get("serverStartTime");
       if (!serverStartTime) {
         throw new Error("No server start time available");
       }
-  
-      const relativeTimestamp = timestamp - serverStartTime;
-      if (relativeTimestamp < 0) {
-        throw new Error(`Invalid relative timestamp: ${relativeTimestamp}`);
-      }
+      
+      const clientTimestamp = Date.now();
+      const clientRelativeTimestamp = clientTimestamp - serverStartTime;
   
       // Verify it's still our turn before submitting
       if (round.get("currentTurnPlayerId") !== player.id) {
@@ -185,12 +165,8 @@ export function HHInterleaved() {
       // Check for slow response
       if (words.length > 0) {
         const lastWord = words[words.length - 1];
-        const responseDelay = relativeTimestamp - lastWord.timestamp;
+        const responseDelay = timestamp - lastWord.timestamp;
         if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
-          //   const currentPenalties = player.get("slowResponsePenalties") || 0;
-          //   player.set("slowResponsePenalties", currentPenalties + 1);
-          //   console.log(`Slow response penalty applied: ${responseDelay}ms`);
-          // }
           const delayPoints = Math.floor(responseDelay / 20000);
           const currentPenalties = player.get("slowResponsePenalties") || 0;
           player.set("slowResponsePenalties", currentPenalties + delayPoints);
@@ -199,7 +175,7 @@ export function HHInterleaved() {
       }
       //add penalty for slow first word too
       if (words.length === 0) {
-        const responseDelay = relativeTimestamp;
+        const responseDelay = timestamp;
         if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
           const delayPoints = Math.floor(responseDelay / 20000);
           const currentPenalties = player.get("slowResponsePenalties") || 0;
@@ -214,8 +190,9 @@ export function HHInterleaved() {
       const updatedWords = [...words, {
         text: wordToSubmit,
         player: player.id,
-        timestamp: relativeTimestamp,
-        absoluteTimestamp: timestamp,
+        timestamp: timestamp,
+        clientTimestamp: clientTimestamp,
+        clientRelativeTimestamp: clientRelativeTimestamp,
       }];
   
       // Atomic updates - update words and change turn together
@@ -226,8 +203,9 @@ export function HHInterleaved() {
   
       console.log(`[Player ${player.id}] Word submission complete:`, {
         word: wordToSubmit,
-        //timestamp,
-        relativeTimestamp,
+        timestamp,
+        clientTimestamp,
+        clientRelativeTimestamp,
         newTurn: otherPlayer.id
       });
 

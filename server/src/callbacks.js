@@ -41,6 +41,11 @@ function setupRounds(game, treatment) {
   const { cueType, interOrder } = treatment;
   const players = game.players;
   
+  // // Always add TimestampTest as the first round for debugging
+  // const testRound = game.addRound({ name: "TimestampTestRound" });
+  // testRound.addStage({ name: "TimestampTest", duration: 120 }); // 2 minutes for testing
+  // console.log("TimestampTest round created as first round");
+  
   const [firstTask, secondTask] = interOrder.split('_');
   
   const interleavedRound1 = game.addRound({ name: "Interleaved1" });

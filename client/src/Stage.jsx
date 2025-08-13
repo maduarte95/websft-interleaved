@@ -10,6 +10,7 @@ import { VerbalFluencyCollab } from "./stages/VerbalFluencyCollab";
 import { HHInterleaved } from "./stages/HHInterleaved";
 import { SwitchesId } from "./stages/SwitchesId";
 import { Labelling } from "./stages/Labelling";
+import { TimestampTest } from "./stages/TimestampTest";
 
 export function Stage() {
   const player = usePlayer();
@@ -29,6 +30,13 @@ export function Stage() {
   }
 
   switch (round.get("name")) {
+    case "TimestampTestRound":
+      switch (stage.get("name")) {
+        case "TimestampTest":
+          return <TimestampTest />;
+        default:
+          return <Loading />;
+      }
     // case "testRound":
       // switch (stage.get("name")) {
       //   case "LocalAPI":
