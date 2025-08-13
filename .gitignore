@@ -1,0 +1,4 @@
+# Data exports
+websft-*/
+*.zip
+*.tar.zst

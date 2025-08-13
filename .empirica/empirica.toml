@@ -1,0 +1,9 @@
+name = "websft-interleaved"
+
+[tajriba.auth]
+srtoken = "pDTlRkLoAwqHpUPY"
+
+[[tajriba.auth.users]]
+name = "Admin"
+username = "admin"
+password = "IbtaOVCg"
