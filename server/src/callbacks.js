@@ -6,7 +6,10 @@ export const Empirica = new ClassicListenersCollector();
 const categoryMap = {
   A: "animals",
   S: "supermarket items",
-  C: "clothing items"
+  C: "clothing items",
+  // // === VIDEO RECORDING SETUP - REMOVE BEFORE DEPLOYMENT ===
+  // F: "fruits"  // Added for human-human video recording demo
+  // // === END VIDEO RECORDING SETUP ===
 };
 
 // One shared client
@@ -21,15 +24,24 @@ function normalizeString(str) {
 const AGENT_NAMES = {
   'adjacent': {
       'animals': 'adjacentAnimals',
-      'clothing items': 'adjacentClothes'
+      'clothing items': 'adjacentClothes',
+      // // === VIDEO RECORDING SETUP - REMOVE BEFORE DEPLOYMENT ===
+      // 'fruits': 'adjacentFruits'  // Added for human-human video recording demo
+      // // === END VIDEO RECORDING SETUP ===
   },
   'divergent': {
       'animals': 'divergentAnimals',
-      'clothing items': 'divergentClothes'
+      'clothing items': 'divergentClothes',
+      // // === VIDEO RECORDING SETUP - REMOVE BEFORE DEPLOYMENT ===
+      // 'fruits': 'divergentFruits'  // Added for human-human video recording demo
+      // // === END VIDEO RECORDING SETUP ===
   },
   'inferred': {
       'animals': 'inferredAnimals',
-      'clothing items': 'inferredClothes'
+      'clothing items': 'inferredClothes',
+      // // === VIDEO RECORDING SETUP - REMOVE BEFORE DEPLOYMENT ===
+      // 'fruits': 'inferredFruits'  // Added for human-human video recording demo
+      // // === END VIDEO RECORDING SETUP ===
   }
 };
 

@@ -68,10 +68,10 @@ import React, { useState, useEffect } from "react";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 
-export function Introduction({ next }) {
+export function IntroductionInterleaved({ next }) {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isButtonEnabled, setIsButtonEnabled] = useState(false);
-  const requiredTime = 178; // video duration + 30 seconds  166 2:28  148+30 = 178
+  const requiredTime = 3; // video duration + 30 seconds 240
 
   useEffect(() => {
     const timer = setInterval(() => {
