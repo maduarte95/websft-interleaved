@@ -116,10 +116,10 @@ export function IntroductionInterleaved({ next }) {
           <iframe 
             loading="lazy" 
             style={{position: "absolute", width: "100%", height: "100%", top: 0, left: 0, border: "none", padding: 0, margin: 0}}
-            src="https://www.canva.com/design/DAGrSeVrbvw/TnAO5H5j8NJT2jfmiMP2rQ/watch?embed"
+            src="https://www.canva.com/design/DAGwicL42b4/M5DzaPD6PHo3AUQub28f7A/watch?embed"
             allowFullScreen={true}
             allow="fullscreen"
-            title="Instructions - Stage 1"
+            title="Instructions - Item Naming Task"
           ></iframe>
         </div>
 
