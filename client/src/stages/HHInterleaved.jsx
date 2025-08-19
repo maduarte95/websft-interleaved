@@ -229,13 +229,13 @@ export function HHInterleaved() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-3xl font-bold mb-6">Name as many items as you can: {category}</h2>
+      <h2 className="text-3xl font-bold mb-6">Name as many items as you can (one at a time): {category}</h2>
       
       <div className="w-full max-w-4xl flex mb-8">
         {/* Left side - Word History */}
         <div className="w-1/3 bg-gray-50 rounded-l-lg shadow-md p-4 border-r border-gray-200">
           <div className="text-sm uppercase tracking-wide text-gray-500 mb-2 text-center font-semibold">
-            Word History
+            Previously named items
           </div>
           <div 
             ref={wordHistoryRef}
