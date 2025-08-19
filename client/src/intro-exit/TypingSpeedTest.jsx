@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { usePlayer } from "@empirica/core/player/classic/react";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
@@ -14,6 +14,7 @@ export function TypingSpeedTest({ next }) {
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
   const player = usePlayer();
   const [hasFailed, setHasFailed] = useState(false);
+  const timerRef = useRef(null);
 
   useEffect(() => {
     if (inputText.length === 1 && !startTime) {
@@ -23,13 +24,13 @@ export function TypingSpeedTest({ next }) {
 
   useEffect(() => {
     if (startTime && !isFinished) {
-      const timer = setInterval(() => {
+      timerRef.current = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         const remaining = TIME_LIMIT - elapsed;
         setTimeLeft(remaining >= 0 ? remaining : 0);
 
         if (remaining <= 0) {
-          clearInterval(timer);
+          clearInterval(timerRef.current);
           setIsFinished(true);
           setHasFailed(true);
           calculateSpeed();
@@ -38,7 +39,11 @@ export function TypingSpeedTest({ next }) {
         }
       }, 1000);
 
-      return () => clearInterval(timer);
+      return () => {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+      };
     }
   }, [startTime, isFinished]);
 
@@ -50,6 +55,10 @@ export function TypingSpeedTest({ next }) {
         setIsFinished(true);
         setHasFailed(false);
         calculateSpeed();
+        // Clear any existing timer to prevent race condition
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
       }
     }
   };
