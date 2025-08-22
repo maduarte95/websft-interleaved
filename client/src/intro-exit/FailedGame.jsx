@@ -9,7 +9,7 @@ export function FailedGame({ next }) {
   return (
     <div className="py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-center mb-4">Study Ended</h2>
+        <h2 className="text-3xl font-bold text-center mb-4">Study Failed to Start</h2>
         <div className="space-y-4 text-center text-gray-600">
           <p className="text-xl">
             Thank you for your interest in participating in our study.
@@ -43,7 +43,7 @@ export function FailedGame({ next }) {
       </Alert>
 
       <div className="mt-8 flex justify-center">
-        <Button handleClick={next}>Continue</Button>
+        <Button handleClick={next}>Continue and finish (don't click if you decide to wait)</Button>
       </div>
     </div>
   );
