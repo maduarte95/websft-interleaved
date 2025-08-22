@@ -479,3 +479,116 @@ Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {
     match: timestamp === verifyTimestamp
   });
 });
+
+// Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
+Empirica.on("round", "words", async (ctx, { round }) => {
+  const stageName = round.currentStage?.get("name");
+  
+  // Handle HHInterleaved (human-human turns)
+  if (stageName === "HHInterleaved") {
+    const words = round.get("words") || [];
+    const currentTurn = round.get("currentTurnPlayerId");
+    
+    console.log(`[HH Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
+    
+    // Check if last word violates turn order (consecutive words from same player)
+    if (words.length >= 2) {
+      const lastWord = words[words.length - 1];
+      const secondLastWord = words[words.length - 2];
+      
+      if (lastWord.player === secondLastWord.player) {
+        console.log(`[HH Turn Validation] VIOLATION DETECTED: Player ${lastWord.player} submitted consecutive words`);
+        console.log(`[HH Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+        
+        // Remove the invalid word
+        const correctedWords = words.slice(0, -1);
+        console.log(`[HH Turn Validation] Removing invalid word. New word count: ${correctedWords.length}`);
+        
+        // Get the other player
+        const players = round.currentGame.players;
+        const otherPlayer = players.find(p => p.id !== lastWord.player);
+        
+        if (!otherPlayer) {
+          console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
+          return;
+        }
+        
+        // Atomic correction: remove invalid word and set correct turn
+        await Promise.all([
+          round.set("words", correctedWords),
+          round.set("currentTurnPlayerId", otherPlayer.id)
+        ]);
+        
+        console.log(`[HH Turn Validation] Corrected turn violation. Turn reset to: ${otherPlayer.id}`);
+        return;
+      }
+    }
+    
+    // If we have words, validate the current turn matches the last word's player
+    if (words.length > 0) {
+      const lastWord = words[words.length - 1];
+      const players = round.currentGame.players;
+      const otherPlayer = players.find(p => p.id !== lastWord.player);
+      
+      if (!otherPlayer) {
+        console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
+        return;
+      }
+      
+      // The turn should now belong to the other player
+      if (currentTurn !== otherPlayer.id) {
+        console.log(`[HH Turn Validation] Turn mismatch detected. Last word by: ${lastWord.player}, but turn is: ${currentTurn}. Setting turn to: ${otherPlayer.id}`);
+        await round.set("currentTurnPlayerId", otherPlayer.id);
+      }
+    }
+  }
+  
+  // Handle VerbalFluencyCollab (human-AI turns)
+  else if (stageName === "VerbalFluencyCollab") {
+    const words = round.get("words") || [];
+    const currentTurn = round.get("currentTurn"); // "user" or "ai"
+    
+    console.log(`[AI Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
+    
+    // Check for consecutive user words (violation!)
+    if (words.length >= 2) {
+      const lastWord = words[words.length - 1];
+      const secondLastWord = words[words.length - 2];
+      
+      if (lastWord.source === 'user' && secondLastWord.source === 'user') {
+        console.log(`[AI Turn Validation] VIOLATION DETECTED: Consecutive user words`);
+        console.log(`[AI Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+        
+        // Remove the duplicate user word
+        const correctedWords = words.slice(0, -1);
+        console.log(`[AI Turn Validation] Removing invalid user word. New word count: ${correctedWords.length}`);
+        
+        // Atomic correction: remove invalid word and set correct turn
+        await Promise.all([
+          round.set("words", correctedWords),
+          round.set("currentTurn", "ai") // It should be AI's turn after user word
+        ]);
+        
+        console.log(`[AI Turn Validation] Corrected turn violation. Turn reset to: ai`);
+        return;
+      }
+    }
+    
+    // Set correct turn based on last word
+    if (words.length > 0) {
+      const lastWord = words[words.length - 1];
+      const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
+      
+      if (currentTurn !== expectedTurn) {
+        console.log(`[AI Turn Validation] Turn mismatch detected. Last word by: ${lastWord.source}, but turn is: ${currentTurn}. Setting turn to: ${expectedTurn}`);
+        await round.set("currentTurn", expectedTurn);
+      }
+    } else {
+      // No words yet, should be user's turn
+      if (currentTurn !== "user") {
+        console.log(`[AI Turn Validation] No words yet, setting turn to: user`);
+        await round.set("currentTurn", "user");
+      }
+    }
+  }
+});
