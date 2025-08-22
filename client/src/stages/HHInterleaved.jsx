@@ -18,6 +18,7 @@ export function HHInterleaved() {
   const inputRef = useRef(null);
   const isSubmittingRef = useRef(false);
   const wordHistoryRef = useRef(null);
+  const previousWordCountRef = useRef(0);
 
   //State variable for progress bar
   const [showProgressBar, setShowProgressBar] = useState(false);
@@ -92,6 +93,47 @@ export function HHInterleaved() {
       setLastWord(`${wordOwner}: ${lastSavedWord.text}`);
     }
     player.round.set("score", words.length); //set both players' score to total word count  
+  }, [round.get("words"), player.id]);
+
+  // Track receive timestamps for words from other players
+  useEffect(() => {
+    const words = round.get("words") || [];
+    const previousWordCount = previousWordCountRef.current;
+    
+    // Check if new words were added
+    if (words.length > previousWordCount) {
+      const newWords = words.slice(previousWordCount);
+      const receiveTimestamps = { ...(player.round.get("wordReceiveTimestamps") || {}) };
+      let hasNewReceiveTimestamps = false;
+      
+      // Process each new word
+      newWords.forEach((word, index) => {
+        const wordIndex = previousWordCount + index;
+        
+        // Only timestamp words received from other players
+        // Also verify the word has required properties to avoid processing incomplete data
+        if (word.player !== player.id && word.text && word.timestamp) {
+          const receiveTimestamp = getStageTimestamp();
+          receiveTimestamps[wordIndex] = {
+            timestamp_received: receiveTimestamp,
+            word_text: word.text,
+            word_sender: word.player,
+            word_sent_timestamp: word.timestamp
+          };
+          hasNewReceiveTimestamps = true;
+          
+          console.log(`[Player ${player.id}] Received word "${word.text}" at timestamp ${receiveTimestamp}ms`);
+        }
+      });
+      
+      // Only update if we actually have new receive timestamps
+      if (hasNewReceiveTimestamps) {
+        player.round.set("wordReceiveTimestamps", receiveTimestamps);
+      }
+    }
+    
+    // Update the previous word count (always update to prevent drift)
+    previousWordCountRef.current = words.length;
   }, [round.get("words"), player.id]); 
 
 

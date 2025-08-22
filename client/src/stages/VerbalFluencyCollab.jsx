@@ -119,7 +119,7 @@ export function VerbalFluencyCollab() {
   
     try {
 
-      // Check for duplicates before setting waiting state
+      // Check for duplicates FIRST before any state changes
       const words = player.round.get("words") || [];
       const normalizedWordToSubmit = normalizeString(wordToSubmit);
       const isDuplicate = words.some(w =>
@@ -132,10 +132,10 @@ export function VerbalFluencyCollab() {
         // Reset progress bar on duplicate rejection
         setShowProgressBar(false);
         setTimeout(() => setShowProgressBar(true), 10);
-        return;  // Exit early without setting isWaitingForAI
+        return;  // Exit early without setting isWaitingForAI or adding word
       }
 
-      // Set waiting state if no duplicates
+      // Set waiting state only after duplicate check passes
       setIsWaitingForAI(true);
       console.log(`[Player ${player.id}] Starting word submission`);
 
