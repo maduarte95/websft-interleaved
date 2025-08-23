@@ -19,94 +19,95 @@ const categoryMap = {
 // One shared client
 const client = new SFTClient();
 
-// ============ TESTING CALLBACKS ============
-// Test callback to verify async behavior doesn't block other players
+// ============ TESTING CALLBACKS (COMMENTED OUT) ============
+// Test callbacks to verify async behavior doesn't block other players
+// Uncomment to test blocking vs non-blocking callback patterns
 
-// Dummy async function that simulates API delay
-function dummyAPICall(playerId, delay = 8000) {
-  return new Promise(resolve => {
-    console.log(`[DUMMY TEST] Starting dummy API call for player ${playerId} (${delay}ms delay)`);
-    setTimeout(() => {
-      console.log(`[DUMMY TEST] Dummy API call completed for player ${playerId}`);
-      resolve(`dummy-response-${playerId}-${Date.now()}`);
-    }, delay);
-  });
-}
+// // Dummy async function that simulates API delay
+// function dummyAPICall(playerId, delay = 8000) {
+//   return new Promise(resolve => {
+//     console.log(`[DUMMY TEST] Starting dummy API call for player ${playerId} (${delay}ms delay)`);
+//     setTimeout(() => {
+//       console.log(`[DUMMY TEST] Dummy API call completed for player ${playerId}`);
+//       resolve(`dummy-response-${playerId}-${Date.now()}`);
+//     }, delay);
+//   });
+// }
 
-// Test with BLOCKING pattern (old way)
-Empirica.on("player", "testTriggerBlocking", async (ctx, { player }) => {
-  if (!player.get("testTriggerBlocking")) return;
-  
-  const startTime = Date.now();
-  const serverStartTime = player.currentStage.get("serverStartTime");
-  const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
-  
-  console.log(`[BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
-  
-  try {
-    // This will BLOCK other players' callbacks
-    const response = await dummyAPICall(player.id, 5000);
-    
-    player.stage.set("testResponse", {
-      response: response,
-      timestamp: Date.now(),
-      playerId: player.id
-    });
-    
-    console.log(`[BLOCKING TEST] Response set for player ${player.id}: ${response}`);
-  } catch (error) {
-    console.error(`[BLOCKING TEST] Error for player ${player.id}:`, error);
-  } finally {
-    await player.set("testTriggerBlocking", false);
-    console.log(`[BLOCKING TEST] Callback completed for player ${player.id}`);
-  }
-});
+// // Test with BLOCKING pattern (old way) - causes player serialization
+// Empirica.on("player", "testTriggerBlocking", async (ctx, { player }) => {
+//   if (!player.get("testTriggerBlocking")) return;
+//   
+//   const startTime = Date.now();
+//   const serverStartTime = player.currentStage.get("serverStartTime");
+//   const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
+//   
+//   console.log(`[BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
+//   
+//   try {
+//     // This will BLOCK other players' callbacks
+//     const response = await dummyAPICall(player.id, 5000);
+//     
+//     player.stage.set("testResponse", {
+//       response: response,
+//       timestamp: Date.now(),
+//       playerId: player.id
+//     });
+//     
+//     console.log(`[BLOCKING TEST] Response set for player ${player.id}: ${response}`);
+//   } catch (error) {
+//     console.error(`[BLOCKING TEST] Error for player ${player.id}:`, error);
+//   } finally {
+//     await player.set("testTriggerBlocking", false);
+//     console.log(`[BLOCKING TEST] Callback completed for player ${player.id}`);
+//   }
+// });
 
-// Test with NON-BLOCKING pattern (new way)
-Empirica.on("player", "testTriggerNonBlocking", (ctx, { player }) => {
-  if (!player.get("testTriggerNonBlocking")) return;
-  
-  // Prevent duplicates
-  if (player.round.get("testProcessing")) {
-    console.log(`[NON-BLOCKING TEST] Already processing for player ${player.id}`);
-    return;
-  }
-  
-  player.round.set("testProcessing", true);
-  
-  const startTime = Date.now();
-  const serverStartTime = player.currentStage.get("serverStartTime");
-  const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
-  
-  console.log(`[NON-BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
-  
-  // Background processing function
-  async function processTest() {
-    try {
-      const response = await dummyAPICall(player.id, 5000);
-      
-      player.stage.set("testResponse", {
-        response: response,
-        timestamp: Date.now(),
-        playerId: player.id
-      });
-      
-      console.log(`[NON-BLOCKING TEST] Response set for player ${player.id}: ${response}`);
-    } catch (error) {
-      console.error(`[NON-BLOCKING TEST] Error for player ${player.id}:`, error);
-    } finally {
-      player.set("testTriggerNonBlocking", false);
-      player.round.set("testProcessing", false);
-      Empirica.flush();
-      console.log(`[NON-BLOCKING TEST] Processing completed for player ${player.id}`);
-    }
-  }
-  
-  // Start background processing - callback returns immediately
-  processTest();
-  
-  console.log(`[NON-BLOCKING TEST] Callback completed immediately for player ${player.id} - processing in background`);
-});
+// // Test with NON-BLOCKING pattern (new way) - allows concurrent execution
+// Empirica.on("player", "testTriggerNonBlocking", (ctx, { player }) => {
+//   if (!player.get("testTriggerNonBlocking")) return;
+//   
+//   // Prevent duplicates
+//   if (player.round.get("testProcessing")) {
+//     console.log(`[NON-BLOCKING TEST] Already processing for player ${player.id}`);
+//     return;
+//   }
+//   
+//   player.round.set("testProcessing", true);
+//   
+//   const startTime = Date.now();
+//   const serverStartTime = player.currentStage.get("serverStartTime");
+//   const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
+//   
+//   console.log(`[NON-BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
+//   
+//   // Background processing function
+//   async function processTest() {
+//     try {
+//       const response = await dummyAPICall(player.id, 5000);
+//       
+//       player.stage.set("testResponse", {
+//         response: response,
+//         timestamp: Date.now(),
+//         playerId: player.id
+//       });
+//       
+//       console.log(`[NON-BLOCKING TEST] Response set for player ${player.id}: ${response}`);
+//     } catch (error) {
+//       console.error(`[NON-BLOCKING TEST] Error for player ${player.id}:`, error);
+//     } finally {
+//       player.set("testTriggerNonBlocking", false);
+//       player.round.set("testProcessing", false);
+//       Empirica.flush();
+//       console.log(`[NON-BLOCKING TEST] Processing completed for player ${player.id}`);
+//     }
+//   }
+//   
+//   // Start background processing - callback returns immediately
+//   processTest();
+//   
+//   console.log(`[NON-BLOCKING TEST] Callback completed immediately for player ${player.id} - processing in background`);
+// });
 
 // ============ END TESTING CALLBACKS ============
 
@@ -148,10 +149,15 @@ function setupRounds(game, treatment) {
   const { cueType, interOrder } = treatment;
   const players = game.players;
   
-  // Add AsyncTest as the first round for testing callback patterns
-  const testRound = game.addRound({ name: "AsyncTestRound" });
-  testRound.addStage({ name: "AsyncTest", duration: 60 }); // 1 minute for testing
-  console.log("AsyncTest round created as first round");
+  // Add ClientSetTest as the first round for testing .set() behavior
+  const clientSetTestRound = game.addRound({ name: "ClientSetTestRound" });
+  clientSetTestRound.addStage({ name: "ClientSetTest", duration: 60 }); // 1 minute for testing
+  console.log("ClientSetTest round created as first round");
+  
+  // // Add AsyncTest as the first round for testing callback patterns
+  // const testRound = game.addRound({ name: "AsyncTestRound" });
+  // testRound.addStage({ name: "AsyncTest", duration: 60 }); // 1 minute for testing
+  // console.log("AsyncTest round created as first round");
   
   const [firstTask, secondTask] = interOrder.split('_');
   
@@ -595,114 +601,128 @@ Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {
 });
 
 // Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
-Empirica.on("round", "words", async (ctx, { round }) => {
+// Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
+Empirica.on("round", "words", (ctx, { round }) => {
   const stageName = round.currentStage?.get("name");
   
-  // Handle HHInterleaved (human-human turns)
-  if (stageName === "HHInterleaved") {
-    const words = round.get("words") || [];
-    const currentTurn = round.get("currentTurnPlayerId");
-    
-    console.log(`[HH Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
-    
-    // Check if last word violates turn order (consecutive words from same player)
-    if (words.length >= 2) {
-      const lastWord = words[words.length - 1];
-      const secondLastWord = words[words.length - 2];
-      
-      if (lastWord.player === secondLastWord.player) {
-        console.log(`[HH Turn Validation] VIOLATION DETECTED: Player ${lastWord.player} submitted consecutive words`);
-        console.log(`[HH Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+  // Background validation function to avoid blocking other callbacks
+  async function validateTurns() {
+    try {
+      // Handle HHInterleaved (human-human turns)
+      if (stageName === "HHInterleaved") {
+        const words = round.get("words") || [];
+        const currentTurn = round.get("currentTurnPlayerId");
         
-        // Remove the invalid word
-        const correctedWords = words.slice(0, -1);
-        console.log(`[HH Turn Validation] Removing invalid word. New word count: ${correctedWords.length}`);
+        console.log(`[HH Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
         
-        // Get the other player
-        const players = round.currentGame.players;
-        const otherPlayer = players.find(p => p.id !== lastWord.player);
-        
-        if (!otherPlayer) {
-          console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
-          return;
+        // Check if last word violates turn order (consecutive words from same player)
+        if (words.length >= 2) {
+          const lastWord = words[words.length - 1];
+          const secondLastWord = words[words.length - 2];
+          
+          if (lastWord.player === secondLastWord.player) {
+            console.log(`[HH Turn Validation] VIOLATION DETECTED: Player ${lastWord.player} submitted consecutive words`);
+            console.log(`[HH Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+            
+            // Remove the invalid word
+            const correctedWords = words.slice(0, -1);
+            console.log(`[HH Turn Validation] Removing invalid word. New word count: ${correctedWords.length}`);
+            
+            // Get the other player
+            const players = round.currentGame.players;
+            const otherPlayer = players.find(p => p.id !== lastWord.player);
+            
+            if (!otherPlayer) {
+              console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
+              return;
+            }
+            
+            // Atomic correction: remove invalid word and set correct turn
+            round.set("words", correctedWords);
+            round.set("currentTurnPlayerId", otherPlayer.id);
+            Empirica.flush();
+            
+            console.log(`[HH Turn Validation] Corrected turn violation. Turn reset to: ${otherPlayer.id}`);
+            return;
+          }
         }
         
-        // Atomic correction: remove invalid word and set correct turn
-        await Promise.all([
-          round.set("words", correctedWords),
-          round.set("currentTurnPlayerId", otherPlayer.id)
-        ]);
+        // If we have words, validate the current turn matches the last word's player
+        if (words.length > 0) {
+          const lastWord = words[words.length - 1];
+          const players = round.currentGame.players;
+          const otherPlayer = players.find(p => p.id !== lastWord.player);
+          
+          if (!otherPlayer) {
+            console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
+            return;
+          }
+          
+          // The turn should now belong to the other player
+          if (currentTurn !== otherPlayer.id) {
+            console.log(`[HH Turn Validation] Turn mismatch detected. Last word by: ${lastWord.player}, but turn is: ${currentTurn}. Setting turn to: ${otherPlayer.id}`);
+            round.set("currentTurnPlayerId", otherPlayer.id);
+            Empirica.flush();
+          }
+        }
+      }
+      
+      // Handle VerbalFluencyCollab (human-AI turns)
+      else if (stageName === "VerbalFluencyCollab") {
+        const words = round.get("words") || [];
+        const currentTurn = round.get("currentTurn"); // "user" or "ai"
         
-        console.log(`[HH Turn Validation] Corrected turn violation. Turn reset to: ${otherPlayer.id}`);
-        return;
+        console.log(`[AI Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
+        
+        // Check for consecutive user words (violation!)
+        if (words.length >= 2) {
+          const lastWord = words[words.length - 1];
+          const secondLastWord = words[words.length - 2];
+          
+          if (lastWord.source === 'user' && secondLastWord.source === 'user') {
+            console.log(`[AI Turn Validation] VIOLATION DETECTED: Consecutive user words`);
+            console.log(`[AI Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+            
+            // Remove the duplicate user word
+            const correctedWords = words.slice(0, -1);
+            console.log(`[AI Turn Validation] Removing invalid user word. New word count: ${correctedWords.length}`);
+            
+            // Atomic correction: remove invalid word and set correct turn
+            round.set("words", correctedWords);
+            round.set("currentTurn", "ai"); // It should be AI's turn after user word
+            Empirica.flush();
+            
+            console.log(`[AI Turn Validation] Corrected turn violation. Turn reset to: ai`);
+            return;
+          }
+        }
+        
+        // Set correct turn based on last word
+        if (words.length > 0) {
+          const lastWord = words[words.length - 1];
+          const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
+          
+          if (currentTurn !== expectedTurn) {
+            console.log(`[AI Turn Validation] Turn mismatch detected. Last word by: ${lastWord.source}, but turn is: ${currentTurn}. Setting turn to: ${expectedTurn}`);
+            round.set("currentTurn", expectedTurn);
+            Empirica.flush();
+          }
+        } else {
+          // No words yet, should be user's turn
+          if (currentTurn !== "user") {
+            console.log(`[AI Turn Validation] No words yet, setting turn to: user`);
+            round.set("currentTurn", "user");
+            Empirica.flush();
+          }
+        }
       }
-    }
-    
-    // If we have words, validate the current turn matches the last word's player
-    if (words.length > 0) {
-      const lastWord = words[words.length - 1];
-      const players = round.currentGame.players;
-      const otherPlayer = players.find(p => p.id !== lastWord.player);
-      
-      if (!otherPlayer) {
-        console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
-        return;
-      }
-      
-      // The turn should now belong to the other player
-      if (currentTurn !== otherPlayer.id) {
-        console.log(`[HH Turn Validation] Turn mismatch detected. Last word by: ${lastWord.player}, but turn is: ${currentTurn}. Setting turn to: ${otherPlayer.id}`);
-        await round.set("currentTurnPlayerId", otherPlayer.id);
-      }
+    } catch (error) {
+      console.error(`[Turn Validation] Error in background validation:`, error);
     }
   }
   
-  // Handle VerbalFluencyCollab (human-AI turns)
-  else if (stageName === "VerbalFluencyCollab") {
-    const words = round.get("words") || [];
-    const currentTurn = round.get("currentTurn"); // "user" or "ai"
-    
-    console.log(`[AI Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
-    
-    // Check for consecutive user words (violation!)
-    if (words.length >= 2) {
-      const lastWord = words[words.length - 1];
-      const secondLastWord = words[words.length - 2];
-      
-      if (lastWord.source === 'user' && secondLastWord.source === 'user') {
-        console.log(`[AI Turn Validation] VIOLATION DETECTED: Consecutive user words`);
-        console.log(`[AI Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
-        
-        // Remove the duplicate user word
-        const correctedWords = words.slice(0, -1);
-        console.log(`[AI Turn Validation] Removing invalid user word. New word count: ${correctedWords.length}`);
-        
-        // Atomic correction: remove invalid word and set correct turn
-        await Promise.all([
-          round.set("words", correctedWords),
-          round.set("currentTurn", "ai") // It should be AI's turn after user word
-        ]);
-        
-        console.log(`[AI Turn Validation] Corrected turn violation. Turn reset to: ai`);
-        return;
-      }
-    }
-    
-    // Set correct turn based on last word
-    if (words.length > 0) {
-      const lastWord = words[words.length - 1];
-      const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
-      
-      if (currentTurn !== expectedTurn) {
-        console.log(`[AI Turn Validation] Turn mismatch detected. Last word by: ${lastWord.source}, but turn is: ${currentTurn}. Setting turn to: ${expectedTurn}`);
-        await round.set("currentTurn", expectedTurn);
-      }
-    } else {
-      // No words yet, should be user's turn
-      if (currentTurn !== "user") {
-        console.log(`[AI Turn Validation] No words yet, setting turn to: user`);
-        await round.set("currentTurn", "user");
-      }
-    }
-  }
+  // Start validation in background - callback returns immediately
+  validateTurns();
+  
+  console.log(`[Turn Validation] Callback completed immediately for round ${round.id} - validation running in background`);
 });

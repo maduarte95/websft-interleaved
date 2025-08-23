@@ -237,11 +237,9 @@ export function HHInterleaved() {
         clientRelativeTimestamp: clientRelativeTimestamp,
       }];
   
-      // Atomic updates - update words and change turn together
-      await Promise.all([
-        round.set("words", updatedWords),
-        round.set("currentTurnPlayerId", otherPlayer.id)
-      ]);
+      // Update words and change turn
+      round.set("words", updatedWords);
+      round.set("currentTurnPlayerId", otherPlayer.id);
   
       console.log(`[Player ${player.id}] Word submission complete:`, {
         word: wordToSubmit,

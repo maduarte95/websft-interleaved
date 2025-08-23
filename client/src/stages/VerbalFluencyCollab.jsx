@@ -209,25 +209,27 @@ export function VerbalFluencyCollab() {
         clientRelativeTimestamp: clientRelativeTimestamp,
       }];
  
-      player.round.set("words", updatedWords); //await removed since it does nothing to this type of expression
-      player.round.set("lastWord", wordToSubmit);  // Changed from currentWord.trim()
-      setLastWord(`You: ${wordToSubmit}`);  // Changed from currentWord.trim()
+      // Add timing checkpoint before API trigger
+      const preApiTriggerTime = getRelativeTimestamp();
+      
+      // Update words, lastWord, and timing checkpoint
+      player.round.set("words", updatedWords);
+      player.round.set("lastWord", wordToSubmit);
+      player.round.set("preApiTriggerTime", preApiTriggerTime);
+      
+      setLastWord(`You: ${wordToSubmit}`);
 
       console.log(`[Player ${player.id}] Word submission complete:`, {
-        word: wordToSubmit,  // Changed from currentWord.trim()
+        word: wordToSubmit,
         timestamp,
         serverStartTime,
       });
       
       console.log(`Updated words: ${JSON.stringify(updatedWords)}`);
+      console.log(`[TIMING] About to trigger API at: ${preApiTriggerTime}ms`);
 
       //Clear progress bar and trigger AI response
       setShowProgressBar(false);
-      
-      // Add timing checkpoint before API trigger
-      const preApiTriggerTime = getRelativeTimestamp();
-      player.round.set("preApiTriggerTime", preApiTriggerTime);
-      console.log(`[TIMING] About to trigger API at: ${preApiTriggerTime}ms`);
       
       triggerAIResponse().catch(error => {
         console.error(`[Player ${player.id}] API trigger failed:`, error);
@@ -270,16 +272,14 @@ export function VerbalFluencyCollab() {
 
         // Add timing checkpoint before Promise.all
         const prePromiseTime = getRelativeTimestamp();
-        player.round.set("prePromiseTime", prePromiseTime);
         console.log(`[TIMING] About to execute Promise.all at: ${prePromiseTime}ms`);
 
-        // Atomic updates
-        await Promise.all([
-            player.round.set("requestTimestamps", updatedTimestamps),
-            player.set("apiTrigger", true)
-        ]);
+        // Update timestamps and trigger API
+        player.round.set("requestTimestamps", updatedTimestamps);
+        player.round.set("prePromiseTime", prePromiseTime);
+        player.set("apiTrigger", true);
         
-        // Add timing checkpoint after Promise.all
+        // Add timing checkpoint after updates
         const postPromiseTime = getRelativeTimestamp();
         player.round.set("postPromiseTime", postPromiseTime);
         console.log(`[TIMING] Promise.all completed at: ${postPromiseTime}ms`);
@@ -298,7 +298,7 @@ export function VerbalFluencyCollab() {
         setIsWaitingForAI(false);
         setShowProgressBar(true);
         pendingResponseRef.current = false;
-        await player.set("apiTrigger", false);
+        player.set("apiTrigger", false);
     }
 }
 
@@ -325,10 +325,12 @@ export function VerbalFluencyCollab() {
 
     console.log("AI response timestamp since start of task:", response.timestamp, "setting words");
     
+    // Update words and clear response
     player.round.set("words", updatedWords);
+    player.stage.set("apiResponse", null);
+    
     setLastWord(`Partner: ${response.text}`);
     setIsWaitingForAI(false);
-    player.stage.set("apiResponse", null);
 
     // Start the progress bar
     setShowProgressBar(true);
