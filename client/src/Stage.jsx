@@ -11,7 +11,6 @@ import { HHInterleaved } from "./stages/HHInterleaved";
 import { SwitchesId } from "./stages/SwitchesId";
 import { Labelling } from "./stages/Labelling";
 import { TimestampTest } from "./stages/TimestampTest";
-import { ClientSetTest } from "./stages/ClientSetTest";
 // import { AsyncTest } from "./stages/AsyncTest";  // Testing component - uncomment to test callback patterns
 
 export function Stage() {
@@ -32,13 +31,6 @@ export function Stage() {
   }
 
   switch (round.get("name")) {
-    case "ClientSetTestRound":
-      switch (stage.get("name")) {
-        case "ClientSetTest":
-          return <ClientSetTest />;
-        default:
-          return <Loading />;
-      }
     case "TimestampTestRound":
       switch (stage.get("name")) {
         case "TimestampTest":

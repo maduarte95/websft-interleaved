@@ -149,11 +149,6 @@ function setupRounds(game, treatment) {
   const { cueType, interOrder } = treatment;
   const players = game.players;
   
-  // Add ClientSetTest as the first round for testing .set() behavior
-  const clientSetTestRound = game.addRound({ name: "ClientSetTestRound" });
-  clientSetTestRound.addStage({ name: "ClientSetTest", duration: 60 }); // 1 minute for testing
-  console.log("ClientSetTest round created as first round");
-  
   // // Add AsyncTest as the first round for testing callback patterns
   // const testRound = game.addRound({ name: "AsyncTestRound" });
   // testRound.addStage({ name: "AsyncTest", duration: 60 }); // 1 minute for testing
