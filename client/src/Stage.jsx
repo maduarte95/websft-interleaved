@@ -11,6 +11,7 @@ import { HHInterleaved } from "./stages/HHInterleaved";
 import { SwitchesId } from "./stages/SwitchesId";
 import { Labelling } from "./stages/Labelling";
 import { TimestampTest } from "./stages/TimestampTest";
+import { AsyncTest } from "./stages/AsyncTest";
 
 export function Stage() {
   const player = usePlayer();
@@ -34,6 +35,13 @@ export function Stage() {
       switch (stage.get("name")) {
         case "TimestampTest":
           return <TimestampTest />;
+        default:
+          return <Loading />;
+      }
+    case "AsyncTestRound":
+      switch (stage.get("name")) {
+        case "AsyncTest":
+          return <AsyncTest />;
         default:
           return <Loading />;
       }

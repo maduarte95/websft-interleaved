@@ -3,6 +3,10 @@ import { SFTClient } from "./utils/SFTClient";
 
 export const Empirica = new ClassicListenersCollector();
 
+// Changes on server side are synchronous
+// This means if a callback is blocking, it will delay the processing of other callbacks for other players!
+// Use flush to avoid delays!
+
 const categoryMap = {
   A: "animals",
   S: "supermarket items",
@@ -14,6 +18,97 @@ const categoryMap = {
 
 // One shared client
 const client = new SFTClient();
+
+// ============ TESTING CALLBACKS ============
+// Test callback to verify async behavior doesn't block other players
+
+// Dummy async function that simulates API delay
+function dummyAPICall(playerId, delay = 8000) {
+  return new Promise(resolve => {
+    console.log(`[DUMMY TEST] Starting dummy API call for player ${playerId} (${delay}ms delay)`);
+    setTimeout(() => {
+      console.log(`[DUMMY TEST] Dummy API call completed for player ${playerId}`);
+      resolve(`dummy-response-${playerId}-${Date.now()}`);
+    }, delay);
+  });
+}
+
+// Test with BLOCKING pattern (old way)
+Empirica.on("player", "testTriggerBlocking", async (ctx, { player }) => {
+  if (!player.get("testTriggerBlocking")) return;
+  
+  const startTime = Date.now();
+  const serverStartTime = player.currentStage.get("serverStartTime");
+  const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
+  
+  console.log(`[BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
+  
+  try {
+    // This will BLOCK other players' callbacks
+    const response = await dummyAPICall(player.id, 3000);
+    
+    player.stage.set("testResponse", {
+      response: response,
+      timestamp: Date.now(),
+      playerId: player.id
+    });
+    
+    console.log(`[BLOCKING TEST] Response set for player ${player.id}: ${response}`);
+  } catch (error) {
+    console.error(`[BLOCKING TEST] Error for player ${player.id}:`, error);
+  } finally {
+    await player.set("testTriggerBlocking", false);
+    console.log(`[BLOCKING TEST] Callback completed for player ${player.id}`);
+  }
+});
+
+// Test with NON-BLOCKING pattern (new way)
+Empirica.on("player", "testTriggerNonBlocking", (ctx, { player }) => {
+  if (!player.get("testTriggerNonBlocking")) return;
+  
+  // Prevent duplicates
+  if (player.round.get("testProcessing")) {
+    console.log(`[NON-BLOCKING TEST] Already processing for player ${player.id}`);
+    return;
+  }
+  
+  player.round.set("testProcessing", true);
+  
+  const startTime = Date.now();
+  const serverStartTime = player.currentStage.get("serverStartTime");
+  const relativeTime = serverStartTime ? startTime - serverStartTime : startTime;
+  
+  console.log(`[NON-BLOCKING TEST] Callback started for player ${player.id} at ${relativeTime}ms`);
+  
+  // Background processing function
+  async function processTest() {
+    try {
+      const response = await dummyAPICall(player.id, 3000);
+      
+      player.stage.set("testResponse", {
+        response: response,
+        timestamp: Date.now(),
+        playerId: player.id
+      });
+      
+      console.log(`[NON-BLOCKING TEST] Response set for player ${player.id}: ${response}`);
+    } catch (error) {
+      console.error(`[NON-BLOCKING TEST] Error for player ${player.id}:`, error);
+    } finally {
+      player.set("testTriggerNonBlocking", false);
+      player.round.set("testProcessing", false);
+      Empirica.flush();
+      console.log(`[NON-BLOCKING TEST] Processing completed for player ${player.id}`);
+    }
+  }
+  
+  // Start background processing - callback returns immediately
+  processTest();
+  
+  console.log(`[NON-BLOCKING TEST] Callback completed immediately for player ${player.id} - processing in background`);
+});
+
+// ============ END TESTING CALLBACKS ============
 
 // Text normalization function - matches client-side normalization
 function normalizeString(str) {
@@ -53,10 +148,10 @@ function setupRounds(game, treatment) {
   const { cueType, interOrder } = treatment;
   const players = game.players;
   
-  // // Always add TimestampTest as the first round for debugging
-  // const testRound = game.addRound({ name: "TimestampTestRound" });
-  // testRound.addStage({ name: "TimestampTest", duration: 120 }); // 2 minutes for testing
-  // console.log("TimestampTest round created as first round");
+  // Add AsyncTest as the first round for testing callback patterns
+  const testRound = game.addRound({ name: "AsyncTestRound" });
+  testRound.addStage({ name: "AsyncTest", duration: 60 }); // 1 minute for testing
+  console.log("AsyncTest round created as first round");
   
   const [firstTask, secondTask] = interOrder.split('_');
   
@@ -489,10 +584,6 @@ Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {
   await player.stage.set("serverTimestamp", timestamp);
   await player.set("requestTimestamp", false);
   await Empirica.flush();
-
-  //issue: there is a bottleneck here, if the api call from one player is not finished, the timestamp from the other player will not be updated and word submission fails!
-  //tried: removing empirica.flush, did not work; batch processing, did not work. try: removing await/ removing await and flush / removing await and keeping await flush
-  //consider - queue system; changing timeout in client side; moving timestamps to client side
 
   // Debugging - verify the timestamp was set correctly
   const verifyTimestamp = player.stage.get("serverTimestamp");
