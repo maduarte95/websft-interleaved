@@ -41,9 +41,7 @@ export default function App() {
     ];
 
     // Uncomment for no intro steps
-    // return [
-    //   taskType === "interleaved" ? IntroductionInterleaved : IntroductionSelfinitiated
-    // ];
+    // return [IntroductionInterleaved];
 
   }
 

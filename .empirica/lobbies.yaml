@@ -1,32 +1,32 @@
 lobbies:
-- name: Test shared fail
-  kind: shared
-  duration: 1m
-  strategy: fail
-- name: Test shared ignore
-  kind: shared
-  duration: 1m
-  strategy: ignore
-- name: Test individual fail
-  kind: individual
-  duration: 1m
-  strategy: fail
-- name: Test individual ignore
-  kind: individual
-  duration: 1m
-  strategy: ignore
+# - name: Test shared fail
+#   kind: shared
+#   duration: 1m
+#   strategy: fail
+# - name: Test shared ignore
+#   kind: shared
+#   duration: 1m
+#   strategy: ignore
+# - name: Test individual fail
+#   kind: individual
+#   duration: 1m
+#   strategy: fail
+# - name: Test individual ignore
+#   kind: individual
+#   duration: 1m
+#   strategy: ignore
 - name: Default individual fail 8m
   kind: individual
   duration: 8m
   strategy: fail
-- name: Default shared fail 8m
-  kind: shared
-  duration: 8m
-  strategy: fail
-- name: Default shared ignore 8m
-  kind: shared
-  duration: 8m
-  strategy: ignore
+# - name: Default shared fail 8m
+#   kind: shared
+#   duration: 8m
+#   strategy: fail
+# - name: Default shared ignore 8m
+#   kind: shared
+#   duration: 8m
+  # strategy: ignore
 - name: Default individual ignore 8m
   kind: individual
   duration: 8m
