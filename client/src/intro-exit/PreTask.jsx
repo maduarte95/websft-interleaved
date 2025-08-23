@@ -29,6 +29,8 @@ export function PreTask({ next }) {
       setError("This study requires native English speakers. Thank you for your interest. Please submit the following code on Prolific: CTNT70UV");
       return;
     }
+    //how button only if failed that redirects to https://app.prolific.com/submissions/complete?cc=CTNT70UV
+
 
     // Set the collected data to the player
     player.set("age", age);
@@ -104,7 +106,7 @@ export function PreTask({ next }) {
         </div>
         <div>
           <label htmlFor="education" className="block text-sm font-medium text-gray-700">
-            Highest Level of Education
+            What is the highest level of education you have completed?
           </label>
           <select
             id="education"
@@ -114,7 +116,7 @@ export function PreTask({ next }) {
           >
             <option value="">Select...</option>
             <option value="none">None</option>
-            <option value="highSchool">High School/Secondary Education</option>
+            <option value="highSchool">High School/Secondary Education or Equivalent</option>
             <option value="bachelor">Bachelor's Degree</option>
             <option value="master">Master's Degree</option>
             <option value="phd">Ph.D. or Equivalent</option>

@@ -54,6 +54,7 @@ export function FinalScoreSummary({ next }) {
 
       <div className="mt-8 flex justify-center">
         <Button handleClick={next}>End experiment (you will not see the code anymore!)</Button>
+        {/* Add redirect to https://app.prolific.com/submissions/complete?cc=C162XOKU */}
       </div>
     </div>
   );

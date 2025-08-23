@@ -13,6 +13,7 @@ factors:
       - value: hC_llmA
       - value: llmA_hC
       - value: llmC_hA
+
       # # === VIDEO RECORDING SETUP - REMOVE BEFORE DEPLOYMENT ===
       # - value: hF_hF  # Human-human fruits for video demo
       # # === END VIDEO RECORDING SETUP ===

@@ -13,6 +13,7 @@ import { FinalScoreSummary } from "./intro-exit/FinalScoreSummary";
 import { MyPlayerForm } from "./intro-exit/MyPlayerForm";
 import { FailedGame } from "./intro-exit/FailedGame";
 import { MyNoGames } from "./intro-exit/MyNoGames";
+import { CustomLobby } from "./components/CustomLobby";
 
 export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -67,6 +68,7 @@ export default function App() {
             noGames={MyNoGames}
             playerCreate={MyPlayerForm}
             consent={MyConsent}
+            lobby={CustomLobby}
             introSteps={introSteps}
             exitSteps={exitSteps}
           >

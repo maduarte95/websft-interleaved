@@ -11,19 +11,19 @@ lobbies:
   kind: individual
   duration: 5m
   strategy: fail
-- name: Default individual fail 1m
+- name: Default individual fail 8m
   kind: individual
-  duration: 1m
+  duration: 8m
   strategy: fail
-- name: Default shared fail 1m
+- name: Default shared fail 8m
   kind: shared
-  duration: 1m
+  duration: 8m
   strategy: fail
 - name: Default shared ignore 1m
   kind: shared
   duration: 1m
   strategy: ignore
-- name: Default individual ignore 1m
+- name: Default individual ignore 8m
   kind: individual
-  duration: 1m
+  duration: 8m
   strategy: ignore

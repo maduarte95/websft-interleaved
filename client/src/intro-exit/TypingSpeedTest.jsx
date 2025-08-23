@@ -121,7 +121,7 @@ export function TypingSpeedTest({ next }) {
         onPaste={(e) => e.preventDefault()}
       />
       
-
+    {/* show button only if failed that redirects to https://app.prolific.com/submissions/complete?cc=CTNT70UV */}
     {isFinished && hasFailed && (
         <div className="w-full max-w-lg">
           <Alert title="Study Participation">
