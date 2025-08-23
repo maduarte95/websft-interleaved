@@ -2,7 +2,7 @@ import React from "react";
 import { Alert } from "../components/Alert";
 
 export function MyNoGames() {
-  const completionCode = "CJHDKHIZ"; // You can change this code as needed
+  const completionCode = "CJHDKHIZ"; 
 
   return (
     <div className="h-screen flex flex-col items-center justify-center p-6">
@@ -16,11 +16,11 @@ export function MyNoGames() {
             Thank you for your interest in participating. Unfortunately, all available slots for this study are currently filled.
           </p>
           <p className="text-gray-600">
-            Please submit the following completion code on Prolific:
+            Please submit the following code on Prolific:
           </p>
         </div>
 
-        <Alert title="Completion Code">
+        <Alert title="Return Code">
           <p className="text-lg font-mono mt-2">
             {completionCode}
           </p>

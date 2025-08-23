@@ -45,7 +45,7 @@ Empirica.on("player", "testTriggerBlocking", async (ctx, { player }) => {
   
   try {
     // This will BLOCK other players' callbacks
-    const response = await dummyAPICall(player.id, 3000);
+    const response = await dummyAPICall(player.id, 5000);
     
     player.stage.set("testResponse", {
       response: response,
@@ -83,7 +83,7 @@ Empirica.on("player", "testTriggerNonBlocking", (ctx, { player }) => {
   // Background processing function
   async function processTest() {
     try {
-      const response = await dummyAPICall(player.id, 3000);
+      const response = await dummyAPICall(player.id, 5000);
       
       player.stage.set("testResponse", {
         response: response,
