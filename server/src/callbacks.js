@@ -242,6 +242,13 @@ Empirica.onStageStart(({ stage }) => {
   const game = stage.currentGame;
   const treatment = game.get("treatment");
   console.log(`Stage ${stageName} started for game ${game.id}. Treatment:`, treatment);
+  
+  // Initialize turn state for VerbalFluencyCollab stages
+  if (stageName === "VerbalFluencyCollab") {
+    const round = stage.round;
+    round.set("currentTurn", "user");
+    console.log(`Initialized AI turn state for round ${round.id}: user's turn`);
+  }
 });
 
 Empirica.onStageEnded(({ stage }) => {
@@ -324,130 +331,146 @@ Empirica.onGameEnded(({ game }) => {
 });
 
 // API call with retries for duplicated words
-Empirica.on("player", "apiTrigger", async (ctx, { player }) => {
+Empirica.on("player", "apiTrigger", (ctx, { player }) => {
   if (!player.get("apiTrigger")) {
       console.log("API trigger is false, skipping API call");
       return;
   }
 
-  // Create session ID from game and round (moved outside try for error handling)
-  // const sessionId = `${player.id}-${player.currentGame.id}-${player.currentRound.get("name")}`;
+  // Prevent concurrent API calls for same player
+  if (player.round.get("apiProcessing")) {
+      console.log(`API already processing for player ${player.id}, skipping duplicate call`);
+      return;
+  }
+
+  // Set processing flag to prevent duplicates
+  player.round.set("apiProcessing", true);
+
+  // Get all data we need immediately
   const sessionId = `${player.id}-${player.currentRound.id}`;
+  const treatment = player.currentGame.get("treatment");
+  const category = player.round.get("category");
+  const requestTime = Date.now();
+  const serverStartTime = player.currentStage.get("serverStartTime");
+  const serverRelativeTime = serverStartTime ? requestTime - serverStartTime : null;
+  const agentName = getAgentName(treatment.cueType, category);
+  const pastWords = player.round.get("words") || [];
+  const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
 
-  try {
-      const treatment = player.currentGame.get("treatment");
-      const category = player.round.get("category");
-      const requestTime = Date.now();
-      
-      // Get exact agent name from mapping
-      const agentName = getAgentName(treatment.cueType, category);
-      console.log(`Using agent: ${agentName} for category: ${category}, cueType: ${treatment.cueType}`);
+  console.log(`[TIMING] Server callback fired at: ${requestTime} (relative: ${serverRelativeTime}ms)`);
+  console.log(`Using agent: ${agentName} for category: ${category}, cueType: ${treatment.cueType}`);
 
-      const pastWords = player.round.get("words") || [];
-      // const lastWord = player.round.get("lastWord") || ""; //caution - doesn't always get the last word - database flushing issue?
-      const tempLastWord = player.round.get("lastWord") || "";
-      const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
-      //getting lastword from list of words works but it's not good for self-initiated rounds -> we need to send all the previous user words to the AI 
+  // Store callback timing immediately (non-blocking)
+  player.round.set("serverCallbackTime", serverRelativeTime);
 
-
+  // Create async function for API processing
+  async function processAPICall() {
       let attempts = 0;
       const maxAttempts = 3;
       let responseText = "";
       let isDuplicate = true;
       let duplicateWords = [];
       
-      // Try up to maxAttempts times to get a non-duplicate word
-      while (isDuplicate && attempts < maxAttempts) {
-          attempts++;
-          console.log(`AI response attempt #${attempts}`);
+      try {
+          // Try up to maxAttempts times to get a non-duplicate word
+          while (isDuplicate && attempts < maxAttempts) {
+              attempts++;
+              console.log(`AI response attempt #${attempts} for player ${player.id}`);
 
-          // let userPrompt = `It's your turn. Past words: ${pastWords.map(w => w.text).join(", ")}. Last word: ${lastWord}`;
-          let userPrompt = `It's your turn. Last word: ${lastWord}`;
-          // If we've had duplicates, add them to the prompt
-          if (duplicateWords.length > 0) {
-            userPrompt += `. Please suggest a different word. The following words were already used: ${duplicateWords.join(", ")}`;
+              let userPrompt = `It's your turn. Last word: ${lastWord}`;
+              if (duplicateWords.length > 0) {
+                userPrompt += `. Please suggest a different word. The following words were already used: ${duplicateWords.join(", ")}`;
+              }
+
+              console.log(`Making API call for player ${player.id}, session ${sessionId}`);
+              
+              // Timing checkpoint before API call
+              const preApiTime = serverStartTime ? Date.now() - serverStartTime : null;
+              player.round.set("preApiCallTime", preApiTime);
+              console.log(`[TIMING] About to start API call at: ${preApiTime}ms`);
+              
+              responseText = await client.generateWithRetry(
+                  userPrompt,
+                  agentName,
+                  sessionId,
+                  player.id,
+                  3  // maxRetries
+              );
+              
+              // Timing checkpoint after API call
+              const postApiTime = serverStartTime ? Date.now() - serverStartTime : null;
+              player.round.set("postApiCallTime", postApiTime);
+              console.log(`[TIMING] API call completed at: ${postApiTime}ms, took: ${postApiTime - preApiTime}ms`);
+
+              // Trim response text
+              responseText = responseText.trim();
+              
+              // Check if this response is a duplicate
+              const normalizedResponse = normalizeString(responseText);
+              isDuplicate = pastWords.some(w => 
+                  normalizeString(w.text) === normalizedResponse
+              );
+              
+              if (isDuplicate) {
+                  duplicateWords.push(responseText);
+                  console.log(`Duplicate AI response detected: "${responseText}". Retrying...`);
+              } else {
+                  console.log(`Non-duplicate AI response received: "${responseText}"`);
+              }
           }
-          console.log(`Making API call for player ${player.id}, session ${sessionId}`);
-          
-          responseText = await client.generateWithRetry(
-              userPrompt,
-              agentName,
-              sessionId,
-              player.id,
-              3  // maxRetries
-          );
 
-          //log templastword
-          console.log(`[DEBUG LASTWORD]: ${tempLastWord}`);
-
-
-          //trim response text
-          responseText = responseText.trim();
-          
-          // Check if this response is a duplicate of any existing word using normalization
-          const normalizedResponse = normalizeString(responseText);
-          isDuplicate = pastWords.some(w => 
-              normalizeString(w.text) === normalizedResponse
-          );
-          
+          // If all attempts resulted in duplicates, log this but still use the last response
           if (isDuplicate) {
-              duplicateWords.push(responseText);
-              console.log(`Duplicate AI response detected: "${responseText}". Retrying...`);
-          } else {
-              console.log(`Non-duplicate AI response received: "${responseText}"`);
+              console.log(`Warning: Used duplicate response "${responseText}" after ${maxAttempts} attempts`);
           }
+
+          // Set the successful response
+          const responseTime = Date.now();
+          const preResponseSetTime = serverStartTime ? responseTime - serverStartTime : null;
+          player.round.set("preResponseSetTime", preResponseSetTime);
+          console.log(`[TIMING] About to set API response at: ${preResponseSetTime}ms`);
+          
+          player.stage.set("apiResponse", {
+              text: responseText,
+              timestamp: responseTime,
+              apiLatency: responseTime - requestTime
+          });
+          
+          const postResponseSetTime = serverStartTime ? Date.now() - serverStartTime : null;
+          player.round.set("postResponseSetTime", postResponseSetTime);
+          console.log(`[TIMING] API response set completed at: ${postResponseSetTime}ms, took: ${postResponseSetTime - preResponseSetTime}ms`);
+          console.log(`API response processed and set for player ${player.id}:`, responseText);
+          
+      } catch (error) {
+          console.error(`API call failed for player ${player.id}:`, error);
+          
+          // Categorize error types
+          const errorType = error.message?.includes('HTTP error') ? 'HTTP' :
+                           error.message?.includes('timeout') ? 'TIMEOUT' :
+                           error.message?.includes('network') ? 'NETWORK' : 'UNKNOWN';
+
+          player.stage.set("apiError", {
+              message: error.message,
+              type: errorType,
+              timestamp: Date.now(),
+              playerId: player.id,
+              sessionId: sessionId
+          });
+
+          console.error(`[API ERROR] Player: ${player.id}, Session: ${sessionId}, Type: ${errorType}, Message: ${error.message}`);
+      } finally {
+          // Clean up both flags
+          player.set("apiTrigger", false);
+          player.round.set("apiProcessing", false);
+          Empirica.flush();
+          console.log(`[TIMING] API processing completed and flags cleared for player ${player.id}`);
       }
-
-      // If all attempts resulted in duplicates, log this but still use the last response
-      if (isDuplicate) {
-          console.log(`Warning: Used duplicate response "${responseText}" after ${maxAttempts} attempts`);
-      }
-
-      // log actual latency
-      const actualresponseTime = Date.now();
-      const actualapiLatency = actualresponseTime - requestTime;
-      console.log("Response received; Latency before artificial delay: ", actualapiLatency);
-
-      // // Add artificial delay
-      // const meanDelay = 1500;
-      // const stdDev = 500;
-      // const minDelay = 500;
-      // const maxDelay = 10000;
-      // const delay = gaussianRandom(meanDelay, stdDev, minDelay, maxDelay);
-      // await new Promise(resolve => setTimeout(resolve, delay));
-
-      const responseTime = Date.now();
-      
-      await player.stage.set("apiResponse", {
-          text: responseText,
-          timestamp: responseTime,
-          apiLatency: responseTime - requestTime
-      });
-
-      console.log(`API response delayed, processed and set for player ${player.id}:`, responseText);
-
-  } catch (error) {
-      console.error(`API call failed for player ${player.id}:`, error);
-
-      // Categorize error types
-      const errorType = error.message?.includes('HTTP error') ? 'HTTP' :
-                       error.message?.includes('timeout') ? 'TIMEOUT' :
-                       error.message?.includes('network') ? 'NETWORK' : 'UNKNOWN';
-
-      await player.stage.set("apiError", {
-          message: error.message,
-          type: errorType,
-          timestamp: Date.now(),
-          playerId: player.id,
-          sessionId: sessionId
-      });
-
-      // Enhanced logging for debugging
-      console.error(`[API ERROR] Player: ${player.id}, Session: ${sessionId}, Type: ${errorType}, Message: ${error.message}`);
-      
-  } finally {
-      await player.set("apiTrigger", false);
   }
+
+  // Start the API processing asynchronously - callback returns immediately!
+  processAPICall();
+
+  console.log(`[TIMING] Callback completed for player ${player.id} - API processing started in background`);
 });
 
 Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {

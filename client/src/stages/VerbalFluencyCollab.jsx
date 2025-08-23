@@ -71,6 +71,23 @@ export function VerbalFluencyCollab() {
   useEffect(() => {
     player.round.set("roundName", "InterleavedLLM");
     console.log(`Component rendered. Start time: ${stage.get("serverStartTime")}, Current time: ${Date.now()}`);
+    
+    // Check server turn state on mount (handles page refresh)
+    const serverTurn = round.get("currentTurn");
+    const apiInProgress = player.get("apiTrigger");
+    
+    console.log(`[Turn State] Server turn: ${serverTurn}, API in progress: ${apiInProgress}`);
+    
+    if (serverTurn === "ai" || apiInProgress) {
+      console.log("Detected AI turn or ongoing API call after refresh - setting waiting state");
+      setIsWaitingForAI(true);
+      pendingResponseRef.current = true;
+      setShowProgressBar(false);
+    } else {
+      console.log("User's turn - enabling input");
+      setIsWaitingForAI(false);
+      setShowProgressBar(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -135,7 +152,17 @@ export function VerbalFluencyCollab() {
         return;  // Exit early without setting isWaitingForAI or adding word
       }
 
-      // Set waiting state only after duplicate check passes
+      // Check server turn state before proceeding
+      const serverTurn = round.get("currentTurn");
+      if (serverTurn !== "user") {
+        console.log(`[Player ${player.id}] Server says it's not user's turn (${serverTurn}). Blocking submission.`);
+        setLastWord("Please wait for your turn");
+        setShowProgressBar(false);
+        setTimeout(() => setShowProgressBar(true), 10);
+        return;
+      }
+
+      // Set waiting state only after all checks pass
       setIsWaitingForAI(true);
       console.log(`[Player ${player.id}] Starting word submission`);
 
@@ -196,7 +223,17 @@ export function VerbalFluencyCollab() {
 
       //Clear progress bar and trigger AI response
       setShowProgressBar(false);
-      await triggerAIResponse();
+      
+      // Add timing checkpoint before API trigger
+      const preApiTriggerTime = getRelativeTimestamp();
+      player.round.set("preApiTriggerTime", preApiTriggerTime);
+      console.log(`[TIMING] About to trigger API at: ${preApiTriggerTime}ms`);
+      
+      triggerAIResponse().catch(error => {
+        console.error(`[Player ${player.id}] API trigger failed:`, error);
+        setIsWaitingForAI(false);
+        setShowProgressBar(true);
+      });
     
     } catch (error) {
       console.error(`[Player ${player.id}] Word submission failed:`, error);
@@ -222,7 +259,7 @@ export function VerbalFluencyCollab() {
         }
 
         const relativeTimestamp = getRelativeTimestamp();
-        console.log(`[Player ${player.id}] Relative timestamp for AI request: ${relativeTimestamp}`);
+        console.log(`[TIMING] Inside triggerAIResponse at: ${relativeTimestamp}ms`);
 
         // Track that we're expecting a response
         pendingResponseRef.current = true;
@@ -231,11 +268,22 @@ export function VerbalFluencyCollab() {
         const requestTimestamps = player.round.get("requestTimestamps") || [];
         const updatedTimestamps = [...requestTimestamps, relativeTimestamp];
 
+        // Add timing checkpoint before Promise.all
+        const prePromiseTime = getRelativeTimestamp();
+        player.round.set("prePromiseTime", prePromiseTime);
+        console.log(`[TIMING] About to execute Promise.all at: ${prePromiseTime}ms`);
+
         // Atomic updates
         await Promise.all([
             player.round.set("requestTimestamps", updatedTimestamps),
             player.set("apiTrigger", true)
         ]);
+        
+        // Add timing checkpoint after Promise.all
+        const postPromiseTime = getRelativeTimestamp();
+        player.round.set("postPromiseTime", postPromiseTime);
+        console.log(`[TIMING] Promise.all completed at: ${postPromiseTime}ms`);
+        console.log(`[TIMING] Promise.all took: ${postPromiseTime - prePromiseTime}ms`);
 
     } catch (error) {
         console.error(`[Player ${player.id}] Failed to trigger AI response:`, error);
