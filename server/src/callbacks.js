@@ -569,7 +569,7 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
   console.log(`[TIMING] Callback completed for player ${player.id} - API processing started in background`);
 });
 
-Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {
+Empirica.on("player", "requestTimestamp", (ctx, { player }) => {
   console.log(`[Timestamp Service] New request from player ${player.id}`);
   console.log(`[Timestamp Service] Current stage: ${player.currentStage.get("name")}`);
   console.log(`[Timestamp Service] Current timestamp: ${player.stage.get("serverTimestamp")}`);
@@ -580,11 +580,16 @@ Empirica.on("player", "requestTimestamp", async (ctx, { player }) => {
     return;
   }
   
-  const timestamp = Date.now();
+  // Background processing for timestamp update
+  async function updateTimestamp() {
+    const timestamp = Date.now();
+    
+    await player.stage.set("serverTimestamp", timestamp);
+    await player.set("requestTimestamp", false);
+    await Empirica.flush();
+  }
   
-  await player.stage.set("serverTimestamp", timestamp);
-  await player.set("requestTimestamp", false);
-  await Empirica.flush();
+  updateTimestamp();
 
   // Debugging - verify the timestamp was set correctly
   const verifyTimestamp = player.stage.get("serverTimestamp");
