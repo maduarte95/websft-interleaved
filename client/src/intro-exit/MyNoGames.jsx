@@ -16,7 +16,7 @@ export function MyNoGames() {
             Thank you for your interest in participating. Unfortunately, all available slots for this study are currently filled.
           </p>
           <p className="text-gray-600">
-            Please submit the following code on Prolific:
+            Please return your task or submit the following code on Prolific:
           </p>
         </div>
 

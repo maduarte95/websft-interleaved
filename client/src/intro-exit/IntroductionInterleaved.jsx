@@ -42,7 +42,7 @@ export function IntroductionInterleaved({ next }) {
 
         {/* Alert to watch the video instructions*/}
         <Alert title="Watch the Video Instructions" kind="warn">
-          <p>Please make sure to watch the video below and read the instructions before proceeding to the first stage.</p>
+          <p>The button below will be enabled after some time. Meanwhile, please watch the video and read the instructions before proceeding.</p>
         </Alert>
 
         {/* Canva Video Embed */}
@@ -82,7 +82,7 @@ export function IntroductionInterleaved({ next }) {
       </div>
 
       <Alert title="Watch the Video Instructions" kind="warn">
-        <p>The button below will be enabled after some time. Meanwhile, please watch the video and read the instructions.</p>
+        <p>IMPORTANT: please don't close your browser or leave the experiment once you click the "Continue" button!</p>
       </Alert>
 
 

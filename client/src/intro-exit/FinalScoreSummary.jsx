@@ -13,6 +13,10 @@ export function FinalScoreSummary({ next }) {
   const bonusBeforePenalty = score * bonusRate;
   const totalBonus = Math.max(0, bonusBeforePenalty - penaltyAmount).toFixed(2); //ensure bonus is not negative
 
+  const handleRedirect = () => {
+    window.location.href = "https://app.prolific.com/submissions/complete?cc=C162XOKU";
+  };
+
   return (
     <div className="py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -42,7 +46,7 @@ export function FinalScoreSummary({ next }) {
 
       <Alert title="Payment Information">
         <p>
-          Please copy and submit the following code to receive your payment:{" "}
+          Copy the following code or click the "Submit" button to receive your payment:{" "}
           {/* <strong>NFDV475O</strong> */}
           <strong>C162XOKU</strong>
         </p>
@@ -53,8 +57,7 @@ export function FinalScoreSummary({ next }) {
       </Alert>
 
       <div className="mt-8 flex justify-center">
-        <Button handleClick={next}>End experiment (you will not see the code anymore!)</Button>
-        {/* Add redirect to https://app.prolific.com/submissions/complete?cc=C162XOKU */}
+        <Button handleClick={handleRedirect}>Submit and Complete Study</Button>
       </div>
     </div>
   );

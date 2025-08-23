@@ -9,6 +9,7 @@ export function PreTask({ next }) {
   const [isNativeEnglish, setIsNativeEnglish] = useState(null);
   const [education, setEducation] = useState("");
   const [error, setError] = useState("");
+  const [isScreenedOut, setIsScreenedOut] = useState(false);
   
 
   const handleSubmit = (e) => {
@@ -26,7 +27,8 @@ export function PreTask({ next }) {
   
     // Check if the participant meets the requirements ## change to not native!
     if (isNativeEnglish === false) { 
-      setError("This study requires native English speakers. Thank you for your interest. Please submit the following code on Prolific: CTNT70UV");
+      setError("This study requires native English speakers. Thank you for your interest. Please click the button below or submit the following code on Prolific: CTNT70UV");
+      setIsScreenedOut(true);
       return;
     }
     //how button only if failed that redirects to https://app.prolific.com/submissions/complete?cc=CTNT70UV
@@ -40,6 +42,10 @@ export function PreTask({ next }) {
 
     // Proceed to the next steps
     next();
+  };
+
+  const handleRedirect = () => {
+    window.location.href = "https://app.prolific.com/submissions/complete?cc=CTNT70UV";
   };
 
   return (
@@ -123,7 +129,11 @@ export function PreTask({ next }) {
           </select>
         </div>
         {error && <p className="text-red-500">{error}</p>}
-        <Button type="submit">Submit</Button>
+        {isScreenedOut ? (
+          <Button handleClick={handleRedirect}>Submit and Exit Study</Button>
+        ) : (
+          <Button type="submit">Submit</Button>
+        )}
       </form>
     </div>
   );

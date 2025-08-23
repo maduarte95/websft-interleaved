@@ -85,6 +85,10 @@ export function TypingSpeedTest({ next }) {
     }
   };
 
+  const handleRedirect = () => {
+    window.location.href = "https://app.prolific.com/submissions/complete?cc=CTNT70UV";
+  };
+
 
 
 
@@ -131,10 +135,16 @@ export function TypingSpeedTest({ next }) {
             <p className="font-semibold">
               Please submit the following code on Prolific: CTNT70UV
             </p>
+            <p className="font-semibold">
+              Alternatively, you can click the button below to exit the study.
+            </p>
           </Alert>
           <p className="mt-4 text-sm text-gray-600">
             Your typing speed: {player.get("typingSpeedWPM")} WPM
           </p>
+          <div className="mt-4">
+            <Button handleClick={handleRedirect}>Submit and Exit Study</Button>
+          </div>
         </div>
       )}
       
