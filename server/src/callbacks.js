@@ -339,12 +339,16 @@ Empirica.onStageStart(({ stage }) => {
   const treatment = game.get("treatment");
   console.log(`Stage ${stageName} started for game ${game.id}. Treatment:`, treatment);
   
-  // Initialize turn state for VerbalFluencyCollab stages
+  // Initialize individual turn states for VerbalFluencyCollab only
   if (stageName === "VerbalFluencyCollab") {
-    const round = stage.round;
-    round.set("currentTurn", "user");
-    console.log(`Initialized AI turn state for round ${round.id}: user's turn`);
+    const players = stage.currentGame.players;
+    
+    players.forEach(player => {
+      player.round.set("currentTurn", "user");
+      console.log(`Initialized individual turn state for player ${player.id}: user's turn`);
+    });
   }
+  // Note: HHInterleaved turn state is initialized in onRoundStart callback
 });
 
 Empirica.onStageEnded(({ stage }) => {
