@@ -302,7 +302,7 @@ export function VerbalFluencyCollab() {
     }
 }
 
-  async function handleAIResponse(response) {
+  function handleAIResponse(response) {
     console.log("Handling AI response:", response);
     pendingResponseRef.current = false;
 

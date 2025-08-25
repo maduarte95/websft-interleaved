@@ -451,6 +451,56 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
   const serverRelativeTime = serverStartTime ? requestTime - serverStartTime : null;
   const agentName = getAgentName(treatment.cueType, category);
   const pastWords = player.round.get("words") || [];
+  
+  // Validate VerbalFluencyCollab turns before API call
+  console.log(`[API Trigger Validation] Player ${player.id} has ${pastWords.length} words`);
+  
+  // Check for consecutive user words (should never happen with proper client, but validate server-side)
+  if (pastWords.length >= 2) {
+    const lastWord = pastWords[pastWords.length - 1];
+    const secondLastWord = pastWords[pastWords.length - 2];
+    
+    if (lastWord.source === 'user' && secondLastWord.source === 'user') {
+      console.log(`[API Trigger Validation] VIOLATION: Player ${player.id} has consecutive user words - blocking API call`);
+      console.log(`[API Trigger Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
+      
+      // Block API call and clean up
+      player.set("apiTrigger", false);
+      player.round.set("apiProcessing", false);
+      
+      // Remove the duplicate user word
+      const correctedWords = pastWords.slice(0, -1);
+      player.round.set("words", correctedWords);
+      
+      // Set turn state
+      const round = player.currentRound;
+      round.set("currentTurn", "ai"); // Should be AI's turn after valid user word
+      
+      console.log(`[API Trigger Validation] Corrected violation - removed duplicate word, blocked API call`);
+      return; // Exit without making API call
+    }
+  }
+  
+  // Set proper turn state based on current words
+  const round = player.currentRound;
+  const currentTurn = round.get("currentTurn");
+  
+  if (pastWords.length > 0) {
+    const lastWord = pastWords[pastWords.length - 1];
+    const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
+    
+    if (currentTurn !== expectedTurn) {
+      console.log(`[API Trigger Validation] Turn correction: Last word by ${lastWord.source}, setting turn to: ${expectedTurn}`);
+      round.set("currentTurn", expectedTurn);
+    }
+  } else {
+    // No words yet, should be user's turn
+    if (currentTurn !== "user") {
+      console.log(`[API Trigger Validation] No words yet, setting turn to: user`);
+      round.set("currentTurn", "user");
+    }
+  }
+
   const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
 
   console.log(`[TIMING] Server callback fired at: ${requestTime} (relative: ${serverRelativeTime}ms)`);
@@ -667,54 +717,10 @@ Empirica.on("round", "words", (ctx, { round }) => {
         }
       }
       
-      // Handle VerbalFluencyCollab (human-AI turns)
+      // VerbalFluencyCollab validation is now handled in the apiTrigger callback
+      // to avoid blocking operations and keep LLM calls non-blocking
       else if (stageName === "VerbalFluencyCollab") {
-        const words = round.get("words") || [];
-        const currentTurn = round.get("currentTurn"); // "user" or "ai"
-        
-        console.log(`[AI Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
-        
-        // Check for consecutive user words (violation!)
-        if (words.length >= 2) {
-          const lastWord = words[words.length - 1];
-          const secondLastWord = words[words.length - 2];
-          
-          if (lastWord.source === 'user' && secondLastWord.source === 'user') {
-            console.log(`[AI Turn Validation] VIOLATION DETECTED: Consecutive user words`);
-            console.log(`[AI Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
-            
-            // Remove the duplicate user word
-            const correctedWords = words.slice(0, -1);
-            console.log(`[AI Turn Validation] Removing invalid user word. New word count: ${correctedWords.length}`);
-            
-            // Atomic correction: remove invalid word and set correct turn
-            round.set("words", correctedWords);
-            round.set("currentTurn", "ai"); // It should be AI's turn after user word
-            Empirica.flush();
-            
-            console.log(`[AI Turn Validation] Corrected turn violation. Turn reset to: ai`);
-            return;
-          }
-        }
-        
-        // Set correct turn based on last word
-        if (words.length > 0) {
-          const lastWord = words[words.length - 1];
-          const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
-          
-          if (currentTurn !== expectedTurn) {
-            console.log(`[AI Turn Validation] Turn mismatch detected. Last word by: ${lastWord.source}, but turn is: ${currentTurn}. Setting turn to: ${expectedTurn}`);
-            round.set("currentTurn", expectedTurn);
-            Empirica.flush();
-          }
-        } else {
-          // No words yet, should be user's turn
-          if (currentTurn !== "user") {
-            console.log(`[AI Turn Validation] No words yet, setting turn to: user`);
-            round.set("currentTurn", "user");
-            Empirica.flush();
-          }
-        }
+        console.log(`[Turn Validation] VerbalFluencyCollab validation handled in apiTrigger callback - skipping`);
       }
     } catch (error) {
       console.error(`[Turn Validation] Error in background validation:`, error);
