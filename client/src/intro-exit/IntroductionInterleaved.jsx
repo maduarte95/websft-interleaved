@@ -83,6 +83,9 @@ export function IntroductionInterleaved({ next }) {
 
       <Alert title="Watch the Video Instructions" kind="warn">
         <p>IMPORTANT: please don't close your browser or leave the experiment once you click the "Continue" button!</p>
+        <p>After this page, you will be paired with a participant.</p>
+        <p>If you leave the experiment after clicking "Continue", your submission will not be accepted and you will have to return it.</p>
+
       </Alert>
 
 
