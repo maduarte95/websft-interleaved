@@ -584,6 +584,10 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
               apiLatency: responseTime - requestTime
           });
           
+          // Set turn back to user after AI responds
+          player.round.set("currentTurn", "user");
+          console.log(`[Turn Management] AI responded, setting turn back to user for player ${player.id}`);
+          
           const postResponseSetTime = serverStartTime ? Date.now() - serverStartTime : null;
           player.round.set("postResponseSetTime", postResponseSetTime);
           console.log(`[TIMING] API response set completed at: ${postResponseSetTime}ms, took: ${postResponseSetTime - preResponseSetTime}ms`);
