@@ -472,32 +472,30 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
       const correctedWords = pastWords.slice(0, -1);
       player.round.set("words", correctedWords);
       
-      // Set turn state
-      const round = player.currentRound;
-      round.set("currentTurn", "ai"); // Should be AI's turn after valid user word
+      // Set turn state for this individual player
+      player.round.set("currentTurn", "ai"); // Should be AI's turn after valid user word
       
       console.log(`[API Trigger Validation] Corrected violation - removed duplicate word, blocked API call`);
       return; // Exit without making API call
     }
   }
   
-  // Set proper turn state based on current words
-  const round = player.currentRound;
-  const currentTurn = round.get("currentTurn");
+  // Set proper turn state for this individual player (not shared)
+  const currentTurn = player.round.get("currentTurn");
   
   if (pastWords.length > 0) {
     const lastWord = pastWords[pastWords.length - 1];
     const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
     
     if (currentTurn !== expectedTurn) {
-      console.log(`[API Trigger Validation] Turn correction: Last word by ${lastWord.source}, setting turn to: ${expectedTurn}`);
-      round.set("currentTurn", expectedTurn);
+      console.log(`[API Trigger Validation] Player ${player.id} turn correction: Last word by ${lastWord.source}, setting turn to: ${expectedTurn}`);
+      player.round.set("currentTurn", expectedTurn);
     }
   } else {
     // No words yet, should be user's turn
     if (currentTurn !== "user") {
-      console.log(`[API Trigger Validation] No words yet, setting turn to: user`);
-      round.set("currentTurn", "user");
+      console.log(`[API Trigger Validation] Player ${player.id} no words yet, setting turn to: user`);
+      player.round.set("currentTurn", "user");
     }
   }
 

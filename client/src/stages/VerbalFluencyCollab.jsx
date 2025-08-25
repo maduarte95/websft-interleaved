@@ -72,11 +72,11 @@ export function VerbalFluencyCollab() {
     player.round.set("roundName", "InterleavedLLM");
     console.log(`Component rendered. Start time: ${stage.get("serverStartTime")}, Current time: ${Date.now()}`);
     
-    // Check server turn state on mount (handles page refresh)
-    const serverTurn = round.get("currentTurn");
+    // Check individual player turn state on mount (handles page refresh)
+    const serverTurn = player.round.get("currentTurn");
     const apiInProgress = player.get("apiTrigger");
     
-    console.log(`[Turn State] Server turn: ${serverTurn}, API in progress: ${apiInProgress}`);
+    console.log(`[Turn State] Player ${player.id} turn: ${serverTurn}, API in progress: ${apiInProgress}`);
     
     if (serverTurn === "ai" || apiInProgress) {
       console.log("Detected AI turn or ongoing API call after refresh - setting waiting state");
@@ -152,8 +152,8 @@ export function VerbalFluencyCollab() {
         return;  // Exit early without setting isWaitingForAI or adding word
       }
 
-      // Check server turn state before proceeding
-      const serverTurn = round.get("currentTurn");
+      // Check individual player turn state before proceeding
+      const serverTurn = player.round.get("currentTurn");
       if (serverTurn !== "user") {
         console.log(`[Player ${player.id}] Server says it's not user's turn (${serverTurn}). Blocking submission.`);
         setLastWord("Please wait for your turn");
