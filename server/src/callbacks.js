@@ -339,14 +339,9 @@ Empirica.onStageStart(({ stage }) => {
   const treatment = game.get("treatment");
   console.log(`Stage ${stageName} started for game ${game.id}. Treatment:`, treatment);
   
-  // Initialize individual turn states for VerbalFluencyCollab only
+  // Initialize turn states for VerbalFluencyCollab - simple approach
   if (stageName === "VerbalFluencyCollab") {
-    const players = stage.currentGame.players;
-    
-    players.forEach(player => {
-      player.round.set("currentTurn", "user");
-      console.log(`Initialized individual turn state for player ${player.id}: user's turn`);
-    });
+    console.log(`[VerbalFluencyCollab] Stage started - players can begin`);
   }
   // Note: HHInterleaved turn state is initialized in onRoundStart callback
 });
@@ -430,199 +425,139 @@ Empirica.onGameEnded(({ game }) => {
   });
 });
 
-// API call with retries for duplicated words
+// Simplified API call - no complex validation, just generate response
 Empirica.on("player", "apiTrigger", (ctx, { player }) => {
   if (!player.get("apiTrigger")) {
-      console.log("API trigger is false, skipping API call");
-      return;
+    return;
   }
 
-  // Prevent concurrent API calls for same player
+  // Prevent concurrent calls
   if (player.round.get("apiProcessing")) {
-      console.log(`API already processing for player ${player.id}, skipping duplicate call`);
-      return;
+    console.log(`[API] Player ${player.id} already processing`);
+    return;
   }
 
-  // Set processing flag to prevent duplicates
   player.round.set("apiProcessing", true);
+  console.log(`[API] Player ${player.id} starting API call`);
 
-  // Get all data we need immediately
+  // Get required data immediately
   const sessionId = `${player.id}-${player.currentRound.id}`;
   const treatment = player.currentGame.get("treatment");
   const category = player.round.get("category");
-  const requestTime = Date.now();
-  const serverStartTime = player.currentStage.get("serverStartTime");
-  const serverRelativeTime = serverStartTime ? requestTime - serverStartTime : null;
   const agentName = getAgentName(treatment.cueType, category);
   const pastWords = player.round.get("words") || [];
-  
-  // Validate VerbalFluencyCollab turns before API call
-  console.log(`[API Trigger Validation] Player ${player.id} has ${pastWords.length} words`);
-  
-  // Check for consecutive user words (should never happen with proper client, but validate server-side)
-  if (pastWords.length >= 2) {
-    const lastWord = pastWords[pastWords.length - 1];
-    const secondLastWord = pastWords[pastWords.length - 2];
-    
-    if (lastWord.source === 'user' && secondLastWord.source === 'user') {
-      console.log(`[API Trigger Validation] VIOLATION: Player ${player.id} has consecutive user words - blocking API call`);
-      console.log(`[API Trigger Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
-      
-      // Block API call and clean up
-      player.set("apiTrigger", false);
-      player.round.set("apiProcessing", false);
-      
-      // Remove the duplicate user word
-      const correctedWords = pastWords.slice(0, -1);
-      player.round.set("words", correctedWords);
-      
-      // Set turn state for this individual player
-      player.round.set("currentTurn", "ai"); // Should be AI's turn after valid user word
-      Empirica.flush();
-      console.log(`[API Trigger Validation] Corrected violation - removed duplicate word, blocked API call`);
-      return; // Exit without making API call
-    }
-  }
-  
-  // Set proper turn state for this individual player (not shared)
-  const currentTurn = player.round.get("currentTurn");
-  
-  if (pastWords.length > 0) {
-    const lastWord = pastWords[pastWords.length - 1];
-    const expectedTurn = lastWord.source === 'user' ? 'ai' : 'user';
-    
-    if (currentTurn !== expectedTurn) {
-      console.log(`[API Trigger Validation] Player ${player.id} turn correction: Last word by ${lastWord.source}, setting turn to: ${expectedTurn}`);
-      player.round.set("currentTurn", expectedTurn);
-    }
-  } else {
-    // No words yet, should be user's turn
-    if (currentTurn !== "user") {
-      console.log(`[API Trigger Validation] Player ${player.id} no words yet, setting turn to: user`);
-      player.round.set("currentTurn", "user");
-    }
-  }
-
   const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
+  const requestTime = Date.now();
 
-  console.log(`[TIMING] Server callback fired at: ${requestTime} (relative: ${serverRelativeTime}ms)`);
-  console.log(`Using agent: ${agentName} for category: ${category}, cueType: ${treatment.cueType}`);
+  // Background processing function
+  function processAPICall() {
+    let attempts = 0;
+    const maxAttempts = 3;
+    let responseText = "";
+    let duplicateWords = [];
 
-  // Store callback timing immediately (non-blocking)
-  player.round.set("serverCallbackTime", serverRelativeTime);
+    // Recursive function to handle retries
+    function makeAPICall() {
+      attempts++;
+      console.log(`[API] Player ${player.id} attempt ${attempts}/${maxAttempts}`);
 
-  // Create async function for API processing
-  async function processAPICall() {
-      let attempts = 0;
-      const maxAttempts = 3;
-      let responseText = "";
-      let isDuplicate = true;
-      let duplicateWords = [];
-      
-      try {
-          // Try up to maxAttempts times to get a non-duplicate word
-          while (isDuplicate && attempts < maxAttempts) {
-              attempts++;
-              console.log(`AI response attempt #${attempts} for player ${player.id}`);
+      let userPrompt = `It's your turn. Last word: ${lastWord}`;
+      if (duplicateWords.length > 0) {
+        userPrompt += `. Please suggest a different word. Already used: ${duplicateWords.join(", ")}`;
+      }
 
-              let userPrompt = `It's your turn. Last word: ${lastWord}`;
-              if (duplicateWords.length > 0) {
-                userPrompt += `. Please suggest a different word. The following words were already used: ${duplicateWords.join(", ")}`;
-              }
+      client.generate(userPrompt, agentName, sessionId, player.id)
+        .then(response => {
+          responseText = response.trim();
+          
+          // Check for duplicates
+          const normalizedResponse = normalizeString(responseText);
+          const isDuplicate = pastWords.some(w => 
+            normalizeString(w.text) === normalizedResponse
+          );
 
-              console.log(`Making API call for player ${player.id}, session ${sessionId}`);
-              
-              // Timing checkpoint before API call
-              const preApiTime = serverStartTime ? Date.now() - serverStartTime : null;
-              player.round.set("preApiCallTime", preApiTime);
-              console.log(`[TIMING] About to start API call at: ${preApiTime}ms`);
-              
-              responseText = await client.generateWithRetry(
-                  userPrompt,
-                  agentName,
-                  sessionId,
-                  player.id,
-                  3  // maxRetries
-              );
-              
-              // Timing checkpoint after API call
-              const postApiTime = serverStartTime ? Date.now() - serverStartTime : null;
-              player.round.set("postApiCallTime", postApiTime);
-              console.log(`[TIMING] API call completed at: ${postApiTime}ms, took: ${postApiTime - preApiTime}ms`);
-
-              // Trim response text
-              responseText = responseText.trim();
-              
-              // Check if this response is a duplicate
-              const normalizedResponse = normalizeString(responseText);
-              isDuplicate = pastWords.some(w => 
-                  normalizeString(w.text) === normalizedResponse
-              );
-              
-              if (isDuplicate) {
-                  duplicateWords.push(responseText);
-                  console.log(`Duplicate AI response detected: "${responseText}". Retrying...`);
-              } else {
-                  console.log(`Non-duplicate AI response received: "${responseText}"`);
-              }
+          if (isDuplicate && attempts < maxAttempts) {
+            duplicateWords.push(responseText);
+            console.log(`[API] Player ${player.id} duplicate: ${responseText}, retrying`);
+            
+            // Log repeated LLM words
+            const repeatedWords = player.round.get("repeatedLLMWords") || [];
+            player.round.set("repeatedLLMWords", [...repeatedWords, responseText]);
+            // No immediate flush needed for analysis data
+            
+            makeAPICall(); // Retry
+            return;
           }
 
-          // If all attempts resulted in duplicates, log this but still use the last response
-          if (isDuplicate) {
-              console.log(`Warning: Used duplicate response "${responseText}" after ${maxAttempts} attempts`);
-          }
-
-          // Set the successful response
+          // Success or max attempts reached
           const responseTime = Date.now();
-          const preResponseSetTime = serverStartTime ? responseTime - serverStartTime : null;
-          player.round.set("preResponseSetTime", preResponseSetTime);
-          console.log(`[TIMING] About to set API response at: ${preResponseSetTime}ms`);
-          
           player.stage.set("apiResponse", {
-              text: responseText,
-              timestamp: responseTime,
-              apiLatency: responseTime - requestTime
+            text: responseText,
+            timestamp: responseTime,
+            apiLatency: responseTime - requestTime
           });
-          
-          // Set turn back to user after AI responds
-          player.round.set("currentTurn", "user");
-          console.log(`[Turn Management] AI responded, setting turn back to user for player ${player.id}`);
-          
-          const postResponseSetTime = serverStartTime ? Date.now() - serverStartTime : null;
-          player.round.set("postResponseSetTime", postResponseSetTime);
-          console.log(`[TIMING] API response set completed at: ${postResponseSetTime}ms, took: ${postResponseSetTime - preResponseSetTime}ms`);
-          console.log(`API response processed and set for player ${player.id}:`, responseText);
-          
-      } catch (error) {
-          console.error(`API call failed for player ${player.id}:`, error);
-          
-          // Categorize error types
-          const errorType = error.message?.includes('HTTP error') ? 'HTTP' :
-                           error.message?.includes('timeout') ? 'TIMEOUT' :
-                           error.message?.includes('network') ? 'NETWORK' : 'UNKNOWN';
+          Empirica.flush(); // Flush API response immediately for client
 
-          player.stage.set("apiError", {
-              message: error.message,
-              type: errorType,
-              timestamp: Date.now(),
-              playerId: player.id,
+          console.log(`[API] Player ${player.id} response: ${responseText}`);
+          
+          if (isDuplicate) {
+            console.log(`[API] Player ${player.id} used duplicate after ${maxAttempts} attempts`);
+            const repeatedWords = player.round.get("repeatedLLMWords") || [];
+            player.round.set("repeatedLLMWords", [...repeatedWords, responseText]);
+            // No flush needed for analysis data
+          }
+        })
+        .catch(error => {
+          console.error(`[API] Player ${player.id} error:`, error.message);
+          
+          // Log error
+          const errors = player.round.get("apiErrors") || [];
+          player.round.set("apiErrors", [...errors, {
+            message: error.message,
+            timestamp: Date.now(),
+            attempt: attempts
+          }]);
+          
+          // Mark the failed interaction for analysis
+          const words = player.round.get("words") || [];
+          const lastUserWord = words.length > 0 ? words[words.length - 1] : null;
+          
+          if (lastUserWord && lastUserWord.source === 'user') {
+            const failedInteractions = player.round.get("failedAPIInteractions") || [];
+            player.round.set("failedAPIInteractions", [...failedInteractions, {
+              userWord: lastUserWord.text,
+              userTimestamp: lastUserWord.timestamp,
+              errorMessage: error.message,
+              errorType: error.message?.includes('timeout') ? 'TIMEOUT' : 'API_ERROR',
+              failureTimestamp: Date.now(),
+              attempt: attempts,
               sessionId: sessionId
+            }]);
+            
+            console.log(`[Failed Interaction] Player ${player.id}: "${lastUserWord.text}" -> ${error.message}`);
+          }
+          
+          player.stage.set("apiError", {
+            message: error.message,
+            type: error.message?.includes('timeout') ? 'TIMEOUT' : 'API_ERROR',
+            timestamp: Date.now()
           });
-
-          console.error(`[API ERROR] Player: ${player.id}, Session: ${sessionId}, Type: ${errorType}, Message: ${error.message}`);
-      } finally {
-          // Clean up both flags
+          Empirica.flush(); // Flush error immediately for client
+        })
+        .finally(() => {
+          // Always clean up
           player.set("apiTrigger", false);
           player.round.set("apiProcessing", false);
-          Empirica.flush();
-          console.log(`[TIMING] API processing completed and flags cleared for player ${player.id}`);
-      }
+          Empirica.flush(); // Flush cleanup flags to prevent duplicate calls
+          console.log(`[API] Player ${player.id} processing complete`);
+        });
+    }
+
+    makeAPICall();
   }
 
-  // Start the API processing asynchronously - callback returns immediately!
+  // Start background processing
   processAPICall();
-
-  console.log(`[TIMING] Callback completed for player ${player.id} - API processing started in background`);
 });
 
 Empirica.on("player", "requestTimestamp", (ctx, { player }) => {
@@ -656,84 +591,40 @@ Empirica.on("player", "requestTimestamp", (ctx, { player }) => {
   });
 });
 
-// Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
+// Simplified turn validation - only for HHInterleaved, not VerbalFluencyCollab
 Empirica.on("round", "words", (ctx, { round }) => {
   const stageName = round.currentStage?.get("name");
   
-  // Background validation function to avoid blocking other callbacks
-  async function validateTurns() {
-    try {
-      // Handle HHInterleaved (human-human turns)
-      if (stageName === "HHInterleaved") {
-        const words = round.get("words") || [];
-        const currentTurn = round.get("currentTurnPlayerId");
+  // Only validate HHInterleaved turns (human-human)
+  if (stageName === "HHInterleaved") {
+    function validateHHTurns() {
+      const words = round.get("words") || [];
+      
+      // Check for consecutive words from same player
+      if (words.length >= 2) {
+        const lastWord = words[words.length - 1];
+        const secondLastWord = words[words.length - 2];
         
-        console.log(`[HH Turn Validation] Words updated in round ${round.id}. Word count: ${words.length}, Current turn: ${currentTurn}`);
-        
-        // Check if last word violates turn order (consecutive words from same player)
-        if (words.length >= 2) {
-          const lastWord = words[words.length - 1];
-          const secondLastWord = words[words.length - 2];
+        if (lastWord.player === secondLastWord.player) {
+          console.log(`[HH Validation] Player ${lastWord.player} consecutive words detected`);
           
-          if (lastWord.player === secondLastWord.player) {
-            console.log(`[HH Turn Validation] VIOLATION DETECTED: Player ${lastWord.player} submitted consecutive words`);
-            console.log(`[HH Turn Validation] Last word: "${lastWord.text}", Second last: "${secondLastWord.text}"`);
-            
-            // Remove the invalid word
-            const correctedWords = words.slice(0, -1);
-            console.log(`[HH Turn Validation] Removing invalid word. New word count: ${correctedWords.length}`);
-            
-            // Get the other player
-            const players = round.currentGame.players;
-            const otherPlayer = players.find(p => p.id !== lastWord.player);
-            
-            if (!otherPlayer) {
-              console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
-              return;
-            }
-            
-            // Atomic correction: remove invalid word and set correct turn
-            round.set("words", correctedWords);
-            round.set("currentTurnPlayerId", otherPlayer.id);
-            Empirica.flush();
-            
-            console.log(`[HH Turn Validation] Corrected turn violation. Turn reset to: ${otherPlayer.id}`);
-            return;
-          }
-        }
-        
-        // If we have words, validate the current turn matches the last word's player
-        if (words.length > 0) {
-          const lastWord = words[words.length - 1];
+          // Remove invalid word and fix turn
+          const correctedWords = words.slice(0, -1);
           const players = round.currentGame.players;
           const otherPlayer = players.find(p => p.id !== lastWord.player);
           
-          if (!otherPlayer) {
-            console.error(`[HH Turn Validation] Could not find other player for ${lastWord.player}`);
-            return;
-          }
-          
-          // The turn should now belong to the other player
-          if (currentTurn !== otherPlayer.id) {
-            console.log(`[HH Turn Validation] Turn mismatch detected. Last word by: ${lastWord.player}, but turn is: ${currentTurn}. Setting turn to: ${otherPlayer.id}`);
+          if (otherPlayer) {
+            round.set("words", correctedWords);
             round.set("currentTurnPlayerId", otherPlayer.id);
             Empirica.flush();
+            console.log(`[HH Validation] Corrected - turn to ${otherPlayer.id}`);
           }
         }
       }
-      
-      // VerbalFluencyCollab validation is now handled in the apiTrigger callback
-      // to avoid blocking operations and keep LLM calls non-blocking
-      else if (stageName === "VerbalFluencyCollab") {
-        console.log(`[Turn Validation] VerbalFluencyCollab validation handled in apiTrigger callback - skipping`);
-      }
-    } catch (error) {
-      console.error(`[Turn Validation] Error in background validation:`, error);
     }
+    
+    validateHHTurns();
   }
   
-  // Start validation in background - callback returns immediately
-  validateTurns();
-  
-  console.log(`[Turn Validation] Callback completed immediately for round ${round.id} - validation running in background`);
+  // Skip VerbalFluencyCollab validation - let client handle it
 });

@@ -17,9 +17,9 @@ export class SFTClient {
             // Add timeout protection
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
-                console.error(`SFTClient - Request timeout after 30 seconds`);
+                console.error(`SFTClient - Request timeout after 60 seconds`);
                 controller.abort();
-            }, 30000); // 30 second timeout
+            }, 60000); // 60 second timeout
 
             const response = await fetch(`${this.baseUrl}/process_message`, {
                 method: 'POST',
@@ -43,7 +43,7 @@ export class SFTClient {
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.error('SFTClient - Request aborted due to timeout');
-                throw new Error('Request timeout after 30 seconds');
+                throw new Error('Request timeout after 60 seconds');
             }
             console.error('SFTClient - Error:', error);
             throw error;

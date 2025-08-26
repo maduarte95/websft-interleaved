@@ -18,18 +18,25 @@ export function VerbalFluencyCollab() {
   //states for the bar
   const [showProgressBar, setShowProgressBar] = useState(false);
   
-  // Add error state management
   const [apiError, setApiError] = useState(null);
-
-  // NEW: Track pending API responses to prevent lost responses
-  const pendingResponseRef = useRef(false);
-  // NEW: Synchronous submission lock
-  const isSubmittingRef = useRef(false);
+  
+  // Simple debounce to prevent rapid clicks
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const debounceTimeoutRef = useRef(null);
 
   // Text normalization function
   const normalizeString = (str) => {
     return str.trim().toLowerCase().replace(/[\s\-',.]+/g, ''); // Remove spaces, hyphens, apostrophes, commas, periods and convert to lowercase
   };
+  
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // Wait for serverStartTime before rendering interactive elements
   const serverStartTime = stage.get("serverStartTime");
@@ -70,21 +77,17 @@ export function VerbalFluencyCollab() {
 
   useEffect(() => {
     player.round.set("roundName", "InterleavedLLM");
-    console.log(`Component rendered. Start time: ${stage.get("serverStartTime")}, Current time: ${Date.now()}`);
+    console.log(`[VerbalFluencyCollab] Player ${player.id} component mounted`);
     
-    // Check individual player turn state on mount (handles page refresh)
-    const serverTurn = player.round.get("currentTurn");
+    // Simple turn state check - robust to page refresh
     const apiInProgress = player.get("apiTrigger");
     
-    console.log(`[Turn State] Player ${player.id} turn: ${serverTurn}, API in progress: ${apiInProgress}`);
-    
-    if (serverTurn === "ai" || apiInProgress) {
-      console.log("Detected AI turn or ongoing API call after refresh - setting waiting state");
+    if (apiInProgress) {
+      console.log(`[Turn State] Player ${player.id} waiting for API response`);
       setIsWaitingForAI(true);
-      pendingResponseRef.current = true;
       setShowProgressBar(false);
     } else {
-      console.log("User's turn - enabling input");
+      console.log(`[Turn State] Player ${player.id} user's turn`);
       setIsWaitingForAI(false);
       setShowProgressBar(true);
     }
@@ -103,240 +106,160 @@ export function VerbalFluencyCollab() {
 
   useEffect(() => {
     const response = player.stage.get("apiResponse");
-    if (response && (isWaitingForAI || pendingResponseRef.current)) {
+    if (response && isWaitingForAI) {
       handleAIResponse(response);
     }
   }, [player.stage.get("apiResponse")]);
 
-  // Monitor for API errors from server
+  // Monitor API errors and reset turn to user
   useEffect(() => {
     const error = player.stage.get("apiError");
-    if (error) {
-      setApiError(error);
+    if (error && isWaitingForAI) {
+      console.log(`[API Error] Player ${player.id}:`, error);
+      setApiError({
+        message: "Something went wrong. Please try again.",
+        type: error.type || "UNKNOWN"
+      });
+      
+      // Reset to user's turn on error
       setIsWaitingForAI(false);
       setShowProgressBar(true);
-      // Clear error after displaying
+      player.set("apiTrigger", false);
+      
+      // Clear error after 5 seconds
       setTimeout(() => setApiError(null), 5000);
     }
   }, [player.stage.get("apiError")]);
-
-
-  async function handleSendWord() {
-
-    // Synchronous checks with ref
-    if (currentWord.trim() === "" || isWaitingForAI || isSubmittingRef.current) {
+  function handleSendWord() {
+    const wordToSubmit = currentWord.trim();
+    
+    // Prevent rapid clicks and empty submissions
+    if (!wordToSubmit || isWaitingForAI || isSubmitting) {
       return;
     }
     
-    // Immediately lock submissions and capture word
-    isSubmittingRef.current = true;
-    const wordToSubmit = currentWord.trim();
+    // Debounce rapid clicks
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    setIsSubmitting(true);
     setCurrentWord(""); // Clear input immediately
-
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      submitWordImmediate(wordToSubmit);
+      setIsSubmitting(false);
+    }, 200); // 200ms debounce
+  }
   
+  function submitWordImmediate(wordToSubmit) {
     try {
-
-      // Check for duplicates FIRST before any state changes
+      // Client-side duplicate check
       const words = player.round.get("words") || [];
-      const normalizedWordToSubmit = normalizeString(wordToSubmit);
-      const isDuplicate = words.some(w =>
-        normalizeString(w.text) === normalizedWordToSubmit
-      );
+      const normalizedWord = normalizeString(wordToSubmit);
+      const isDuplicate = words.some(w => normalizeString(w.text) === normalizedWord);
 
       if (isDuplicate) {
-        console.log(`Duplicate word rejected: ${wordToSubmit}`);
+        console.log(`[Duplicate] Player ${player.id}: ${wordToSubmit}`);
         setLastWord(`"${wordToSubmit}" was already used!`);
-        // Reset progress bar on duplicate rejection
-        setShowProgressBar(false);
-        setTimeout(() => setShowProgressBar(true), 10);
-        return;  // Exit early without setting isWaitingForAI or adding word
-      }
-
-      // Check individual player turn state before proceeding
-      const serverTurn = player.round.get("currentTurn");
-      if (serverTurn !== "user") {
-        console.log(`[Player ${player.id}] Server says it's not user's turn (${serverTurn}). Blocking submission.`);
-        setLastWord("Please wait for your turn");
-        setShowProgressBar(false);
-        setTimeout(() => setShowProgressBar(true), 10);
+        resetProgressBar();
         return;
       }
 
-      // Set waiting state only after all checks pass
-      setIsWaitingForAI(true);
-      console.log(`[Player ${player.id}] Starting word submission`);
-
-      const serverStartTime = stage.get("serverStartTime");
-      if (!serverStartTime) {
-        throw new Error("No server start time available");
+      // Check if API is already in progress
+      if (player.get("apiTrigger")) {
+        console.log(`[Block] Player ${player.id} API already in progress`);
+        setLastWord("Please wait...");
+        return;
       }
 
+      console.log(`[Submit] Player ${player.id} submitting: ${wordToSubmit}`);
+      
+      // Calculate timestamps and penalties
       const timestamp = getRelativeTimestamp();
       const clientTimestamp = Date.now();
-      const clientRelativeTimestamp = clientTimestamp - serverStartTime;
+      const serverStartTime = stage.get("serverStartTime");
       
-      console.log(`[Player ${player.id}] Got timestamps - stage timer: ${timestamp}ms, client relative: ${clientRelativeTimestamp}ms`);
-
-
-      // Check if player took too long to respond to the last word
-      if (words.length > 0) {
-        const lastWord = words[words.length - 1];
-        const responseDelay = timestamp - lastWord.timestamp;
-        if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
-          const delayPoints = Math.floor(responseDelay / 20000);
-          const currentPenalties = player.get("slowResponsePenalties") || 0;
-          player.set("slowResponsePenalties", currentPenalties + delayPoints);
-          console.log(`Slow response penalty applied: ${delayPoints} penalties`);
-        }
-      }
-
-      //add penalty for slow first word too
-      if (words.length === 0) {
-        const responseDelay = timestamp;
-        if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
-          const delayPoints = Math.floor(responseDelay / 20000);
-          const currentPenalties = player.get("slowResponsePenalties") || 0;
-          player.set("slowResponsePenalties", currentPenalties + delayPoints);
-          console.log(`Slow response penalty applied to first word: ${delayPoints} penalties`);
-        }
-      }
-  
-      const updatedWords = [...words, {
+      applySlowResponsePenalty(words, timestamp);
+      
+      // Add word to array
+      const newWord = {
         text: wordToSubmit,
         source: 'user',
-        timestamp: timestamp,
-        clientTimestamp: clientTimestamp,
-        clientRelativeTimestamp: clientRelativeTimestamp,
-      }];
- 
-      // Add timing checkpoint before API trigger
-      const preApiTriggerTime = getRelativeTimestamp();
+        timestamp,
+        clientTimestamp,
+        clientRelativeTimestamp: clientTimestamp - serverStartTime,
+      };
       
-      // Update words, lastWord, and timing checkpoint
+      const updatedWords = [...words, newWord];
       player.round.set("words", updatedWords);
-      player.round.set("lastWord", wordToSubmit);
-      player.round.set("preApiTriggerTime", preApiTriggerTime);
-      
       setLastWord(`You: ${wordToSubmit}`);
 
-      console.log(`[Player ${player.id}] Word submission complete:`, {
-        word: wordToSubmit,
-        timestamp,
-        serverStartTime,
-      });
-      
-      console.log(`Updated words: ${JSON.stringify(updatedWords)}`);
-      console.log(`[TIMING] About to trigger API at: ${preApiTriggerTime}ms`);
-
-      //Clear progress bar and trigger AI response
+      // Set waiting state and trigger API
+      setIsWaitingForAI(true);
       setShowProgressBar(false);
+      player.set("apiTrigger", true);
       
-      triggerAIResponse().catch(error => {
-        console.error(`[Player ${player.id}] API trigger failed:`, error);
-        setIsWaitingForAI(false);
-        setShowProgressBar(true);
-      });
-    
+      console.log(`[Submit] Player ${player.id} API triggered`);
+      
     } catch (error) {
-      console.error(`[Player ${player.id}] Word submission failed:`, error);
+      console.error(`[Submit] Player ${player.id} error:`, error);
+      // Reset state on error
+      setIsWaitingForAI(false);
+      setShowProgressBar(true);
       player.set("apiTrigger", false);
-      setIsWaitingForAI(false); // Reset waiting state on error
-      // Reset progress bar on submission failure
-      setShowProgressBar(false);
-      setTimeout(() => setShowProgressBar(true), 10);
-      // On error, restore the word to input if it wasn't a duplicate
-      if (wordToSubmit && !words?.some(w => normalizeString(w.text) === normalizeString(wordToSubmit))) {
-        setCurrentWord(wordToSubmit);
-      }
-    } finally {
-      isSubmittingRef.current = false;
     }
   }
-
-
-  async function triggerAIResponse() {
-    try {
-        if (player.get("apiTrigger")) {
-            console.log("API call already in progress");
-            return;
-        }
-
-        const relativeTimestamp = getRelativeTimestamp();
-        console.log(`[TIMING] Inside triggerAIResponse at: ${relativeTimestamp}ms`);
-
-        // Track that we're expecting a response
-        pendingResponseRef.current = true;
-
-        // Record request timestamp
-        const requestTimestamps = player.round.get("requestTimestamps") || [];
-        const updatedTimestamps = [...requestTimestamps, relativeTimestamp];
-
-        // Add timing checkpoint before Promise.all
-        const prePromiseTime = getRelativeTimestamp();
-        console.log(`[TIMING] About to execute Promise.all at: ${prePromiseTime}ms`);
-
-        // Update timestamps and trigger API
-        player.round.set("requestTimestamps", updatedTimestamps);
-        player.round.set("prePromiseTime", prePromiseTime);
-        player.set("apiTrigger", true);
-        
-        // Add timing checkpoint after updates
-        const postPromiseTime = getRelativeTimestamp();
-        player.round.set("postPromiseTime", postPromiseTime);
-        console.log(`[TIMING] Promise.all completed at: ${postPromiseTime}ms`);
-        console.log(`[TIMING] Promise.all took: ${postPromiseTime - prePromiseTime}ms`);
-
-    } catch (error) {
-        console.error(`[Player ${player.id}] Failed to trigger AI response:`, error);
-        
-        // Set user-visible error
-        setApiError({
-            message: "Something went wrong. Please try again.",
-            type: "API_CALL_FAILED"
-        });
-        
-        // Clean up all states if API trigger fails
-        setIsWaitingForAI(false);
-        setShowProgressBar(true);
-        pendingResponseRef.current = false;
-        player.set("apiTrigger", false);
+  
+  function applySlowResponsePenalty(words, currentTimestamp) {
+    const PENALTY_THRESHOLD = 20000; // 20 seconds
+    let responseDelay = currentTimestamp; // For first word
+    
+    if (words.length > 0) {
+      const lastWord = words[words.length - 1];
+      responseDelay = currentTimestamp - lastWord.timestamp;
     }
-}
+    
+    if (responseDelay > PENALTY_THRESHOLD) {
+      const delayPoints = Math.floor(responseDelay / PENALTY_THRESHOLD);
+      const currentPenalties = player.get("slowResponsePenalties") || 0;
+      player.set("slowResponsePenalties", currentPenalties + delayPoints);
+      console.log(`[Penalty] Player ${player.id}: +${delayPoints} penalties`);
+    }
+  }
+  
+  function resetProgressBar() {
+    setShowProgressBar(false);
+    setTimeout(() => setShowProgressBar(true), 50);
+  }
 
   function handleAIResponse(response) {
-    console.log("Handling AI response:", response);
-    pendingResponseRef.current = false;
-
+    console.log(`[AI Response] Player ${player.id}: ${response.text}`);
+    
     const timestamp = getRelativeTimestamp();
     const clientTimestamp = Date.now();
     const serverStartTime = stage.get("serverStartTime");
-    const clientRelativeTimestamp = clientTimestamp - serverStartTime;
 
     const words = player.round.get("words") || [];
-    const updatedWords = [...words, { 
-      text: response.text, 
-      source: 'ai', 
-      timestamp: timestamp, // stage timer elapsed time
-      clientTimestamp: clientTimestamp, // absolute client time
-      clientRelativeTimestamp: clientRelativeTimestamp, // client-based elapsed time
-      serverTimestamp: response.timestamp, // absolute server time
-      serverRelativeTimestamp: response.timestamp - serverStartTime, // server-based elapsed time
+    const newAIWord = {
+      text: response.text,
+      source: 'ai',
+      timestamp,
+      clientTimestamp,
+      clientRelativeTimestamp: clientTimestamp - serverStartTime,
+      serverTimestamp: response.timestamp,
       apiLatency: response.apiLatency,
-    }];
+    };
 
-    console.log("AI response timestamp since start of task:", response.timestamp, "setting words");
-    
-    // Update words and clear response
+    const updatedWords = [...words, newAIWord];
     player.round.set("words", updatedWords);
-    player.stage.set("apiResponse", null);
-    
+    player.stage.set("apiResponse", null); // Clear response
+
     setLastWord(`Partner: ${response.text}`);
     setIsWaitingForAI(false);
-
-    // Start the progress bar
     setShowProgressBar(true);
-
-    console.log("AI response processed. Updated words:", updatedWords);
+    
+    console.log(`[AI Response] Player ${player.id} turn returned to user`);
   }
 
   // function handleKeyDown(event) {
@@ -418,12 +341,12 @@ export function VerbalFluencyCollab() {
                     ? 'bg-gray-100 border-gray-300 text-gray-500'
                     : 'border-blue-300 focus:ring-blue-500'
                 }`}
-                disabled={isWaitingForAI || isSubmittingRef.current}
+                disabled={isWaitingForAI || isSubmitting}
                 autoFocus
               />
               <Button 
                 handleClick={handleSendWord} 
-                disabled={isWaitingForAI || isSubmittingRef.current || currentWord.trim() === ""}
+                disabled={isWaitingForAI || isSubmitting || currentWord.trim() === ""}
               >
                 Send
               </Button>
