@@ -132,19 +132,24 @@ export function VerbalFluencyCollab() {
   }, [player.stage.get("apiError")]);
   function handleSendWord() {
     const wordToSubmit = currentWord.trim();
+    console.log(`[CLIENT SUBMIT START] Player ${player.id} attempting: "${wordToSubmit}"`);
+    console.log(`[CLIENT SUBMIT START] State - waiting: ${isWaitingForAI}, submitting: ${isSubmitting}`);
     
     // Prevent rapid clicks and empty submissions
     if (!wordToSubmit || isWaitingForAI || isSubmitting) {
+      console.log(`[CLIENT SUBMIT BLOCKED] Player ${player.id} - empty: ${!wordToSubmit}, waiting: ${isWaitingForAI}, submitting: ${isSubmitting}`);
       return;
     }
     
     // Debounce rapid clicks
     if (debounceTimeoutRef.current) {
+      console.log(`[CLIENT DEBOUNCE] Player ${player.id} clearing previous debounce`);
       clearTimeout(debounceTimeoutRef.current);
     }
     
     setIsSubmitting(true);
     setCurrentWord(""); // Clear input immediately
+    console.log(`[CLIENT DEBOUNCE] Player ${player.id} starting 200ms debounce for "${wordToSubmit}"`);
     
     debounceTimeoutRef.current = setTimeout(() => {
       submitWordImmediate(wordToSubmit);
@@ -153,32 +158,50 @@ export function VerbalFluencyCollab() {
   }
   
   function submitWordImmediate(wordToSubmit) {
+    console.log(`[CLIENT IMMEDIATE] Player ${player.id} executing immediate submit for "${wordToSubmit}"`);
+    
     try {
       // Client-side duplicate check
       const words = player.round.get("words") || [];
+      console.log(`[CLIENT WORDS] Player ${player.id} current words array:`, words.map(w => `${w.source}:"${w.text}"`));
+      
       const normalizedWord = normalizeString(wordToSubmit);
-      const isDuplicate = words.some(w => normalizeString(w.text) === normalizedWord);
+      console.log(`[CLIENT NORMALIZE] Player ${player.id} normalized "${wordToSubmit}" to "${normalizedWord}"`);
+      
+      const isDuplicate = words.some(w => {
+        const normalizedExisting = normalizeString(w.text);
+        const matches = normalizedExisting === normalizedWord;
+        if (matches) {
+          console.log(`[CLIENT DUPLICATE MATCH] "${normalizedWord}" matches existing "${normalizedExisting}" from "${w.text}"`);
+        }
+        return matches;
+      });
 
       if (isDuplicate) {
-        console.log(`[Duplicate] Player ${player.id}: ${wordToSubmit}`);
+        console.log(`[CLIENT DUPLICATE REJECTED] Player ${player.id}: "${wordToSubmit}"`);
         setLastWord(`"${wordToSubmit}" was already used!`);
         resetProgressBar();
         return;
       }
 
       // Check if API is already in progress
-      if (player.get("apiTrigger")) {
-        console.log(`[Block] Player ${player.id} API already in progress`);
+      const currentApiTrigger = player.get("apiTrigger");
+      console.log(`[CLIENT API CHECK] Player ${player.id} current apiTrigger: ${currentApiTrigger}`);
+      
+      if (currentApiTrigger) {
+        console.log(`[CLIENT API BLOCKED] Player ${player.id} API already in progress`);
         setLastWord("Please wait...");
         return;
       }
 
-      console.log(`[Submit] Player ${player.id} submitting: ${wordToSubmit}`);
+      console.log(`[CLIENT SUBMIT APPROVED] Player ${player.id} all checks passed for "${wordToSubmit}"`);
       
       // Calculate timestamps and penalties
       const timestamp = getRelativeTimestamp();
       const clientTimestamp = Date.now();
       const serverStartTime = stage.get("serverStartTime");
+      
+      console.log(`[CLIENT TIMING] Player ${player.id} timestamps - relative: ${timestamp}, client: ${clientTimestamp}, server start: ${serverStartTime}`);
       
       applySlowResponsePenalty(words, timestamp);
       
@@ -191,19 +214,28 @@ export function VerbalFluencyCollab() {
         clientRelativeTimestamp: clientTimestamp - serverStartTime,
       };
       
+      console.log(`[CLIENT NEW WORD] Player ${player.id} creating word object:`, newWord);
+      
       const updatedWords = [...words, newWord];
+      console.log(`[CLIENT UPDATED WORDS] Player ${player.id} new words array:`, updatedWords.map(w => `${w.source}:"${w.text}"`));
+      
+      console.log(`[CLIENT SET WORDS] Player ${player.id} calling player.round.set("words", updatedWords)`);
       player.round.set("words", updatedWords);
+      console.log(`[CLIENT SET WORDS COMPLETE] Player ${player.id} words set operation completed`);
+      
       setLastWord(`You: ${wordToSubmit}`);
 
       // Set waiting state and trigger API
+      console.log(`[CLIENT SET STATES] Player ${player.id} setting waiting=true, progressBar=false`);
       setIsWaitingForAI(true);
       setShowProgressBar(false);
-      player.set("apiTrigger", true);
       
-      console.log(`[Submit] Player ${player.id} API triggered`);
+      console.log(`[CLIENT API TRIGGER] Player ${player.id} calling player.set("apiTrigger", true)`);
+      player.set("apiTrigger", true);
+      console.log(`[CLIENT API TRIGGER COMPLETE] Player ${player.id} API trigger set`);
       
     } catch (error) {
-      console.error(`[Submit] Player ${player.id} error:`, error);
+      console.error(`[CLIENT ERROR] Player ${player.id} submission error:`, error);
       // Reset state on error
       setIsWaitingForAI(false);
       setShowProgressBar(true);

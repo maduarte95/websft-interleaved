@@ -427,27 +427,55 @@ Empirica.onGameEnded(({ game }) => {
 
 // Simplified API call - no complex validation, just generate response
 Empirica.on("player", "apiTrigger", (ctx, { player }) => {
-  if (!player.get("apiTrigger")) {
+  console.log(`[SERVER API CALLBACK] Player ${player.id} callback triggered`);
+  
+  const apiTriggerValue = player.get("apiTrigger");
+  console.log(`[SERVER API CALLBACK] Player ${player.id} apiTrigger value: ${apiTriggerValue}`);
+  
+  if (!apiTriggerValue) {
+    console.log(`[SERVER API CALLBACK] Player ${player.id} apiTrigger false, exiting`);
     return;
   }
 
   // Prevent concurrent calls
-  if (player.round.get("apiProcessing")) {
-    console.log(`[API] Player ${player.id} already processing`);
+  const apiProcessing = player.round.get("apiProcessing");
+  console.log(`[SERVER API CALLBACK] Player ${player.id} apiProcessing value: ${apiProcessing}`);
+  
+  if (apiProcessing) {
+    console.log(`[SERVER API CALLBACK] Player ${player.id} already processing, exiting`);
     return;
   }
 
   player.round.set("apiProcessing", true);
-  console.log(`[API] Player ${player.id} starting API call`);
+  console.log(`[SERVER API START] Player ${player.id} starting API call`);
 
   // Get required data immediately
   const sessionId = `${player.id}-${player.currentRound.id}`;
   const treatment = player.currentGame.get("treatment");
   const category = player.round.get("category");
   const agentName = getAgentName(treatment.cueType, category);
+  
+  console.log(`[SERVER DATA] Player ${player.id} sessionId: ${sessionId}, category: ${category}, agentName: ${agentName}`);
+  
   const pastWords = player.round.get("words") || [];
+  console.log(`[SERVER WORDS ARRAY] Player ${player.id} pastWords:`, pastWords.map(w => `${w.source}:"${w.text}"`));
+  console.log(`[SERVER WORDS ARRAY] Player ${player.id} pastWords.length: ${pastWords.length}`);
+  
+  // The last word should always be the user's word that triggered this API call
   const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
+  console.log(`[SERVER LAST WORD] Player ${player.id} lastWord: "${lastWord}"`);
+  
+  if (pastWords.length > 0) {
+    const lastWordObj = pastWords[pastWords.length - 1];
+    console.log(`[SERVER LAST WORD DETAILS] Player ${player.id} last word object:`, {
+      text: lastWordObj.text,
+      source: lastWordObj.source,
+      timestamp: lastWordObj.timestamp
+    });
+  }
+  
   const requestTime = Date.now();
+  console.log(`[SERVER TIMING] Player ${player.id} request time: ${requestTime}`);
 
   // Background processing function
   function processAPICall() {
@@ -459,31 +487,50 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
     // Recursive function to handle retries
     function makeAPICall() {
       attempts++;
-      console.log(`[API] Player ${player.id} attempt ${attempts}/${maxAttempts}`);
+      console.log(`[SERVER API ATTEMPT] Player ${player.id} attempt ${attempts}/${maxAttempts}`);
 
       let userPrompt = `It's your turn. Last word: ${lastWord}`;
+      console.log(`[SERVER PROMPT BASE] Player ${player.id} base prompt: "${userPrompt}"`);
+      
       if (duplicateWords.length > 0) {
-        userPrompt += `. Please suggest a different word. Already used: ${duplicateWords.join(", ")}`;
+        const duplicateAddition = `. Please suggest a different word. Already used: ${duplicateWords.join(", ")}`;
+        userPrompt += duplicateAddition;
+        console.log(`[SERVER PROMPT DUPLICATE] Player ${player.id} added duplicate text: "${duplicateAddition}"`);
       }
+      
+      console.log(`[SERVER PROMPT FINAL] Player ${player.id} final prompt: "${userPrompt}"`);
+      console.log(`[SERVER API CALL] Player ${player.id} calling client.generate`);
 
       client.generate(userPrompt, agentName, sessionId, player.id)
         .then(response => {
+          console.log(`[SERVER API RESPONSE] Player ${player.id} raw response: "${response}"`);
           responseText = response.trim();
+          console.log(`[SERVER API RESPONSE] Player ${player.id} trimmed response: "${responseText}"`);
           
           // Check for duplicates
           const normalizedResponse = normalizeString(responseText);
-          const isDuplicate = pastWords.some(w => 
-            normalizeString(w.text) === normalizedResponse
-          );
+          console.log(`[SERVER DUPLICATE CHECK] Player ${player.id} normalized response: "${normalizedResponse}"`);
+          
+          const isDuplicate = pastWords.some(w => {
+            const normalizedExisting = normalizeString(w.text);
+            const matches = normalizedExisting === normalizedResponse;
+            if (matches) {
+              console.log(`[SERVER DUPLICATE MATCH] Player ${player.id} "${normalizedResponse}" matches existing "${normalizedExisting}" from "${w.text}"`);
+            }
+            return matches;
+          });
+          
+          console.log(`[SERVER DUPLICATE RESULT] Player ${player.id} isDuplicate: ${isDuplicate}, attempts: ${attempts}/${maxAttempts}`);
 
           if (isDuplicate && attempts < maxAttempts) {
             duplicateWords.push(responseText);
-            console.log(`[API] Player ${player.id} duplicate: ${responseText}, retrying`);
+            console.log(`[SERVER DUPLICATE RETRY] Player ${player.id} duplicate: "${responseText}", retrying`);
             
             // Log repeated LLM words
             const repeatedWords = player.round.get("repeatedLLMWords") || [];
-            player.round.set("repeatedLLMWords", [...repeatedWords, responseText]);
-            // No immediate flush needed for analysis data
+            const updatedRepeatedWords = [...repeatedWords, responseText];
+            player.round.set("repeatedLLMWords", updatedRepeatedWords);
+            console.log(`[SERVER REPEATED WORDS] Player ${player.id} updated repeated words:`, updatedRepeatedWords);
             
             makeAPICall(); // Retry
             return;
@@ -491,40 +538,58 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
 
           // Success or max attempts reached
           const responseTime = Date.now();
-          player.stage.set("apiResponse", {
+          const apiLatency = responseTime - requestTime;
+          
+          console.log(`[SERVER SUCCESS] Player ${player.id} final response: "${responseText}"`);
+          console.log(`[SERVER TIMING] Player ${player.id} API latency: ${apiLatency}ms`);
+          
+          const apiResponseObj = {
             text: responseText,
             timestamp: responseTime,
-            apiLatency: responseTime - requestTime
-          });
+            apiLatency: apiLatency
+          };
+          
+          console.log(`[SERVER SET RESPONSE] Player ${player.id} setting apiResponse:`, apiResponseObj);
+          player.stage.set("apiResponse", apiResponseObj);
+          
+          console.log(`[SERVER FLUSH RESPONSE] Player ${player.id} flushing API response`);
           Empirica.flush(); // Flush API response immediately for client
-
-          console.log(`[API] Player ${player.id} response: ${responseText}`);
+          console.log(`[SERVER FLUSH COMPLETE] Player ${player.id} response flush completed`);
           
           if (isDuplicate) {
-            console.log(`[API] Player ${player.id} used duplicate after ${maxAttempts} attempts`);
+            console.log(`[SERVER FINAL DUPLICATE] Player ${player.id} used duplicate "${responseText}" after ${maxAttempts} attempts`);
             const repeatedWords = player.round.get("repeatedLLMWords") || [];
-            player.round.set("repeatedLLMWords", [...repeatedWords, responseText]);
-            // No flush needed for analysis data
+            const updatedRepeatedWords = [...repeatedWords, responseText];
+            player.round.set("repeatedLLMWords", updatedRepeatedWords);
+            console.log(`[SERVER FINAL REPEATED] Player ${player.id} final repeated words:`, updatedRepeatedWords);
           }
         })
         .catch(error => {
-          console.error(`[API] Player ${player.id} error:`, error.message);
+          console.error(`[SERVER API ERROR] Player ${player.id} error:`, error.message);
+          console.error(`[SERVER API ERROR] Player ${player.id} full error:`, error);
           
           // Log error
           const errors = player.round.get("apiErrors") || [];
-          player.round.set("apiErrors", [...errors, {
+          const newError = {
             message: error.message,
             timestamp: Date.now(),
             attempt: attempts
-          }]);
+          };
+          const updatedErrors = [...errors, newError];
+          
+          console.log(`[SERVER ERROR LOG] Player ${player.id} logging error:`, newError);
+          player.round.set("apiErrors", updatedErrors);
           
           // Mark the failed interaction for analysis
           const words = player.round.get("words") || [];
+          console.log(`[SERVER ERROR ANALYSIS] Player ${player.id} words for failed interaction:`, words.map(w => `${w.source}:"${w.text}"`));
+          
           const lastUserWord = words.length > 0 ? words[words.length - 1] : null;
+          console.log(`[SERVER ERROR ANALYSIS] Player ${player.id} lastUserWord:`, lastUserWord);
           
           if (lastUserWord && lastUserWord.source === 'user') {
             const failedInteractions = player.round.get("failedAPIInteractions") || [];
-            player.round.set("failedAPIInteractions", [...failedInteractions, {
+            const failedInteraction = {
               userWord: lastUserWord.text,
               userTimestamp: lastUserWord.timestamp,
               errorMessage: error.message,
@@ -532,24 +597,41 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
               failureTimestamp: Date.now(),
               attempt: attempts,
               sessionId: sessionId
-            }]);
+            };
             
-            console.log(`[Failed Interaction] Player ${player.id}: "${lastUserWord.text}" -> ${error.message}`);
+            const updatedFailedInteractions = [...failedInteractions, failedInteraction];
+            player.round.set("failedAPIInteractions", updatedFailedInteractions);
+            
+            console.log(`[SERVER FAILED INTERACTION] Player ${player.id} logged:`, failedInteraction);
           }
           
-          player.stage.set("apiError", {
+          const apiErrorObj = {
             message: error.message,
             type: error.message?.includes('timeout') ? 'TIMEOUT' : 'API_ERROR',
             timestamp: Date.now()
-          });
+          };
+          
+          console.log(`[SERVER SET ERROR] Player ${player.id} setting apiError:`, apiErrorObj);
+          player.stage.set("apiError", apiErrorObj);
+          
+          console.log(`[SERVER FLUSH ERROR] Player ${player.id} flushing API error`);
           Empirica.flush(); // Flush error immediately for client
+          console.log(`[SERVER ERROR FLUSH COMPLETE] Player ${player.id} error flush completed`);
         })
         .finally(() => {
+          console.log(`[SERVER CLEANUP] Player ${player.id} starting cleanup`);
+          
           // Always clean up
+          console.log(`[SERVER CLEANUP] Player ${player.id} setting apiTrigger = false`);
           player.set("apiTrigger", false);
+          
+          console.log(`[SERVER CLEANUP] Player ${player.id} setting apiProcessing = false`);
           player.round.set("apiProcessing", false);
+          
+          console.log(`[SERVER CLEANUP] Player ${player.id} flushing cleanup flags`);
           Empirica.flush(); // Flush cleanup flags to prevent duplicate calls
-          console.log(`[API] Player ${player.id} processing complete`);
+          
+          console.log(`[SERVER COMPLETE] Player ${player.id} processing complete`);
         });
     }
 
