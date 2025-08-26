@@ -337,7 +337,7 @@ export function VerbalFluencyCollab() {
                 }}
                 placeholder="Enter an item..."
                 className={`flex-grow p-3 text-lg border rounded-l-lg focus:outline-none focus:ring-2 ${
-                  isWaitingForAI || isSubmittingRef.current
+                  isWaitingForAI || isSubmitting
                     ? 'bg-gray-100 border-gray-300 text-gray-500'
                     : 'border-blue-300 focus:ring-blue-500'
                 }`}
