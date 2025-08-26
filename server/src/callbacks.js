@@ -478,7 +478,7 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
       
       // Set turn state for this individual player
       player.round.set("currentTurn", "ai"); // Should be AI's turn after valid user word
-      
+      Empirica.flush();
       console.log(`[API Trigger Validation] Corrected violation - removed duplicate word, blocked API call`);
       return; // Exit without making API call
     }
