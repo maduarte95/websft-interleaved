@@ -657,7 +657,6 @@ Empirica.on("player", "requestTimestamp", (ctx, { player }) => {
 });
 
 // Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
-// Server-side turn validation for both HHInterleaved and VerbalFluencyCollab
 Empirica.on("round", "words", (ctx, { round }) => {
   const stageName = round.currentStage?.get("name");
   

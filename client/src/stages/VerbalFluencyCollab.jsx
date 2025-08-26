@@ -239,6 +239,7 @@ export function VerbalFluencyCollab() {
     
     } catch (error) {
       console.error(`[Player ${player.id}] Word submission failed:`, error);
+      player.set("apiTrigger", false);
       setIsWaitingForAI(false); // Reset waiting state on error
       // Reset progress bar on submission failure
       setShowProgressBar(false);
