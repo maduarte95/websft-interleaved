@@ -229,8 +229,8 @@ export function VerbalFluencyCollab() {
       const updatedWords = [...words, newWord];
       console.log(`[CLIENT UPDATED WORDS] Player ${player.id} new words array:`, updatedWords.map(w => `${w.source}:"${w.text}"`));
       
-      console.log(`[CLIENT SET WORDS] Player ${player.id} calling player.round.set("words", updatedWords)`);
-      player.round.set("words", updatedWords);
+      console.log(`[CLIENT SET WORDS] Player ${player.id} calling player.set("words", updatedWords)`);
+      player.set("words", updatedWords); // Primary storage - triggers server callback (server copies to player.round)
       console.log(`[CLIENT SET WORDS COMPLETE] Player ${player.id} words set operation completed`);
       
       setLastWord(`You: ${wordToSubmit}`);
@@ -291,7 +291,7 @@ export function VerbalFluencyCollab() {
     };
 
     const updatedWords = [...words, newAIWord];
-    player.round.set("words", updatedWords);
+    player.set("words", updatedWords); // Primary storage (server copies to player.round)
     player.stage.set("apiResponse", null); // Clear response
 
     setLastWord(`Partner: ${response.text}`);

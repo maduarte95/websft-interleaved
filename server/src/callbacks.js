@@ -425,9 +425,9 @@ Empirica.onGameEnded(({ game }) => {
   });
 });
 
-// Words-triggered API call - only for VerbalFluencyCollab stage user words
-// Listen to player.round.words changes (player-specific round data)
-Empirica.on("player", "round.words", (ctx, { player }) => {
+// Words-triggered API call - only for VerbalFluencyCollab stage user words  
+// Listen to player.words changes (then copy to player.round.words for compatibility)
+Empirica.on("player", "words", (ctx, { player, words }) => {
   const stageName = player.currentStage?.get("name");
   
   // Only trigger API for VerbalFluencyCollab stage
@@ -435,7 +435,11 @@ Empirica.on("player", "round.words", (ctx, { player }) => {
     return;
   }
   
-  const words = player.round.get("words") || [];
+  // Use words from callback parameter (recommended by Empirica docs)
+  if (!words) words = [];
+  
+  // Copy to player.round.words for compatibility with other code
+  player.round.set("words", words);
 
   // Only trigger API if last word is from user
   if (words.length === 0) return;
