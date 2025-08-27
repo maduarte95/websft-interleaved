@@ -5,7 +5,7 @@ import { Alert } from "../components/Alert";
 export function IntroductionInterleaved({ next }) {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isButtonEnabled, setIsButtonEnabled] = useState(false);
-  const requiredTime = 4; // video duration + 30 seconds 240
+  const requiredTime = 240; // video duration + 30 seconds 240
 
   useEffect(() => {
     const timer = setInterval(() => {
