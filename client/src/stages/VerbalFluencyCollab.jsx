@@ -79,11 +79,13 @@ export function VerbalFluencyCollab() {
     player.round.set("roundName", "InterleavedLLM");
     console.log(`[VerbalFluencyCollab] Player ${player.id} component mounted`);
     
-    // Simple turn state check - robust to page refresh
-    const apiInProgress = player.get("apiTrigger");
+    // Check if we're waiting for AI based on word pattern
+    const words = player.round.get("words") || [];
+    const lastWord = words[words.length - 1];
+    const waitingForAI = lastWord && lastWord.source === 'user';
     
-    if (apiInProgress) {
-      console.log(`[Turn State] Player ${player.id} waiting for API response`);
+    if (waitingForAI) {
+      console.log(`[Turn State] Player ${player.id} waiting for AI response (last word was user)`);
       setIsWaitingForAI(true);
       setShowProgressBar(false);
     } else {
@@ -101,6 +103,17 @@ export function VerbalFluencyCollab() {
     const lastSavedWord = words[words.length - 1];
     if (lastSavedWord) {
       setLastWord(`${lastSavedWord.source === 'user' ? 'You' : 'Partner'}: ${lastSavedWord.text}`);
+      
+      // Update turn state based on last word source
+      if (lastSavedWord.source === 'user') {
+        console.log(`[Turn State Update] Player ${player.id} waiting for AI (last word was user)`);
+        setIsWaitingForAI(true);
+        setShowProgressBar(false);
+      } else if (lastSavedWord.source === 'ai') {
+        console.log(`[Turn State Update] Player ${player.id} user's turn (last word was AI)`);
+        setIsWaitingForAI(false);
+        setShowProgressBar(true);
+      }
     }
   }, [player.round.get("words")]);
 
@@ -124,7 +137,6 @@ export function VerbalFluencyCollab() {
       // Reset to user's turn on error
       setIsWaitingForAI(false);
       setShowProgressBar(true);
-      player.set("apiTrigger", false);
       
       // Clear error after 5 seconds
       setTimeout(() => setApiError(null), 5000);
@@ -184,12 +196,10 @@ export function VerbalFluencyCollab() {
         return;
       }
 
-      // Check if API is already in progress
-      const currentApiTrigger = player.get("apiTrigger");
-      console.log(`[CLIENT API CHECK] Player ${player.id} current apiTrigger: ${currentApiTrigger}`);
-      
-      if (currentApiTrigger) {
-        console.log(`[CLIENT API BLOCKED] Player ${player.id} API already in progress`);
+      // Check if we're already waiting for AI (last word was user)
+      const lastWordInArray = words[words.length - 1];
+      if (lastWordInArray && lastWordInArray.source === 'user') {
+        console.log(`[CLIENT API BLOCKED] Player ${player.id} API already in progress (last word was user)`);
         setLastWord("Please wait...");
         return;
       }
@@ -225,21 +235,18 @@ export function VerbalFluencyCollab() {
       
       setLastWord(`You: ${wordToSubmit}`);
 
-      // Set waiting state and trigger API
+      // Set waiting state - API will be triggered by words array update
       console.log(`[CLIENT SET STATES] Player ${player.id} setting waiting=true, progressBar=false`);
       setIsWaitingForAI(true);
       setShowProgressBar(false);
       
-      console.log(`[CLIENT API TRIGGER] Player ${player.id} calling player.set("apiTrigger", true)`);
-      player.set("apiTrigger", true);
-      console.log(`[CLIENT API TRIGGER COMPLETE] Player ${player.id} API trigger set`);
+      console.log(`[CLIENT] Player ${player.id} word added to array - server callback will handle API trigger`);
       
     } catch (error) {
       console.error(`[CLIENT ERROR] Player ${player.id} submission error:`, error);
       // Reset state on error
       setIsWaitingForAI(false);
       setShowProgressBar(true);
-      player.set("apiTrigger", false);
     }
   }
   

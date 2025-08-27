@@ -710,3 +710,49 @@ Empirica.on("round", "words", (ctx, { round }) => {
   
   // Skip VerbalFluencyCollab validation - let client handle it
 });
+
+// New API trigger callback - triggered by words array updates
+Empirica.on("player", "words", (ctx, { player, round }) => {
+  const stageName = round.currentStage?.get("name");
+  
+  // Only trigger API for VerbalFluencyCollab stage
+  if (stageName !== "VerbalFluencyCollab") {
+    return;
+  }
+  
+  const words = player.round.get("words") || [];
+  console.log(`[WORDS CALLBACK] Player ${player.id} words updated - array length: ${words.length}`);
+  
+  if (words.length === 0) {
+    console.log(`[WORDS CALLBACK] Player ${player.id} no words to process`);
+    return;
+  }
+  
+  const lastWord = words[words.length - 1];
+  console.log(`[WORDS CALLBACK] Player ${player.id} last word:`, lastWord);
+  
+  // Only trigger API if last word is from user
+  if (lastWord.source === 'user') {
+    console.log(`[WORDS CALLBACK] Player ${player.id} triggering API for user word: "${lastWord.text}"`);
+    
+    // Call the existing API logic
+    handleLLMInteraction(player, round)
+      .then(() => {
+        console.log(`[WORDS CALLBACK] Player ${player.id} API interaction completed successfully`);
+        Empirica.flush();
+      })
+      .catch(error => {
+        console.error(`[WORDS CALLBACK] Player ${player.id} API interaction failed:`, error);
+        
+        // Set error for client to handle
+        player.stage.set("apiError", {
+          type: error.name || "API_ERROR", 
+          message: error.message || "Unknown API error",
+          timestamp: Date.now()
+        });
+        Empirica.flush();
+      });
+  } else {
+    console.log(`[WORDS CALLBACK] Player ${player.id} last word was AI - no API trigger needed`);
+  }
+});
