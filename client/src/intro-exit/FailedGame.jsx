@@ -21,15 +21,15 @@ export function FailedGame({ next }) {
           <p className="text-xl">
             We were not able to pair you with a partner, so the experiment could not start at this time.
           </p>
-          <p className="text-xl">
+          {/* <p className="text-xl">
           You can either wait for the study to start or end the task now. 
-          </p>
+          </p> */}
         </div>
       </div>
       
       <Alert title="What to do next?">
         <p>
-        If you wish to end the task here, click the button below or submit the following code to Prolific:{" "}
+        Please click the button below or submit the following code to Prolific:{" "}
           <strong>CWVAS57A</strong>
         </p>
         <p>
@@ -38,9 +38,9 @@ export function FailedGame({ next }) {
         {/* <p className="pt-1">
           You will receive the <strong>base reward</strong> for your time.
         </p> */}
-        <p className="pt-1">
+        {/* <p className="pt-1">
           <strong>If you wish to continue the task, don't click "Continue" and wait a few minutes until we find a study partner.</strong>
-        </p>
+        </p> */}
         {/* <p className="pt-1">
           If you believe you are seeing this message in error, please refresh the page or contact the research team.
         </p> */}
