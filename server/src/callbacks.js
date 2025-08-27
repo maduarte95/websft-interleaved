@@ -425,27 +425,37 @@ Empirica.onGameEnded(({ game }) => {
   });
 });
 
-// Simplified API call - no complex validation, just generate response
-Empirica.on("player", "apiTrigger", (ctx, { player }) => {
-  console.log(`[SERVER API CALLBACK] Player ${player.id} callback triggered`);
+// Words-triggered API call - only for VerbalFluencyCollab stage user words
+// Listen to player.round.words changes (player-specific round data)
+Empirica.on("player", "round.words", (ctx, { player }) => {
+  const stageName = player.currentStage?.get("name");
   
-  const apiTriggerValue = player.get("apiTrigger");
-  console.log(`[SERVER API CALLBACK] Player ${player.id} apiTrigger value: ${apiTriggerValue}`);
+  // Only trigger API for VerbalFluencyCollab stage
+  if (stageName !== "VerbalFluencyCollab") {
+    return;
+  }
   
-  if (!apiTriggerValue) {
-    console.log(`[SERVER API CALLBACK] Player ${player.id} apiTrigger false, exiting`);
+  const words = player.round.get("words") || [];
+
+  // Only trigger API if last word is from user
+  if (words.length === 0) return;
+
+  const lastWordObj = words[words.length - 1];
+  if (lastWordObj.source !== 'user') {
+    console.log(`[Words Update] Player ${player.id} last word is AI, skipping trigger`);
     return;
   }
 
-  // Prevent concurrent calls
-  const apiProcessing = player.round.get("apiProcessing");
-  console.log(`[SERVER API CALLBACK] Player ${player.id} apiProcessing value: ${apiProcessing}`);
-  
-  if (apiProcessing) {
-    console.log(`[SERVER API CALLBACK] Player ${player.id} already processing, exiting`);
+  // Check if we're already processing
+  if (player.round.get("apiProcessing")) {
+    console.log(`[Words Update] Player ${player.id} already processing, skipping`);
     return;
   }
 
+  // This is a user word - trigger API
+  console.log(`[Words Update] Player ${player.id} user word "${lastWordObj.text}" triggering API`);
+
+  // Set processing flag and start API call
   player.round.set("apiProcessing", true);
   console.log(`[SERVER API START] Player ${player.id} starting API call`);
 
@@ -462,11 +472,10 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
   console.log(`[SERVER WORDS ARRAY] Player ${player.id} pastWords.length: ${pastWords.length}`);
   
   // The last word should always be the user's word that triggered this API call
-  const lastWord = pastWords.length > 0 ? pastWords[pastWords.length - 1].text : "";
+  const lastWord = lastWordObj.text; // Same word that triggered this callback
   console.log(`[SERVER LAST WORD] Player ${player.id} lastWord: "${lastWord}"`);
   
   if (pastWords.length > 0) {
-    const lastWordObj = pastWords[pastWords.length - 1];
     console.log(`[SERVER LAST WORD DETAILS] Player ${player.id} last word object:`, {
       text: lastWordObj.text,
       source: lastWordObj.source,
@@ -622,8 +631,7 @@ Empirica.on("player", "apiTrigger", (ctx, { player }) => {
           console.log(`[SERVER CLEANUP] Player ${player.id} starting cleanup`);
           
           // Always clean up
-          console.log(`[SERVER CLEANUP] Player ${player.id} setting apiTrigger = false`);
-          player.set("apiTrigger", false);
+          // Note: apiTrigger cleanup removed since we now use words trigger
           
           console.log(`[SERVER CLEANUP] Player ${player.id} setting apiProcessing = false`);
           player.round.set("apiProcessing", false);
@@ -711,48 +719,3 @@ Empirica.on("round", "words", (ctx, { round }) => {
   // Skip VerbalFluencyCollab validation - let client handle it
 });
 
-// New API trigger callback - triggered by words array updates
-Empirica.on("player", "words", (ctx, { player, round }) => {
-  const stageName = round.currentStage?.get("name");
-  
-  // Only trigger API for VerbalFluencyCollab stage
-  if (stageName !== "VerbalFluencyCollab") {
-    return;
-  }
-  
-  const words = player.round.get("words") || [];
-  console.log(`[WORDS CALLBACK] Player ${player.id} words updated - array length: ${words.length}`);
-  
-  if (words.length === 0) {
-    console.log(`[WORDS CALLBACK] Player ${player.id} no words to process`);
-    return;
-  }
-  
-  const lastWord = words[words.length - 1];
-  console.log(`[WORDS CALLBACK] Player ${player.id} last word:`, lastWord);
-  
-  // Only trigger API if last word is from user
-  if (lastWord.source === 'user') {
-    console.log(`[WORDS CALLBACK] Player ${player.id} triggering API for user word: "${lastWord.text}"`);
-    
-    // Call the existing API logic
-    handleLLMInteraction(player, round)
-      .then(() => {
-        console.log(`[WORDS CALLBACK] Player ${player.id} API interaction completed successfully`);
-        Empirica.flush();
-      })
-      .catch(error => {
-        console.error(`[WORDS CALLBACK] Player ${player.id} API interaction failed:`, error);
-        
-        // Set error for client to handle
-        player.stage.set("apiError", {
-          type: error.name || "API_ERROR", 
-          message: error.message || "Unknown API error",
-          timestamp: Date.now()
-        });
-        Empirica.flush();
-      });
-  } else {
-    console.log(`[WORDS CALLBACK] Player ${player.id} last word was AI - no API trigger needed`);
-  }
-});
