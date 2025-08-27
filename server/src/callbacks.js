@@ -471,7 +471,8 @@ Empirica.on("player", "words", (ctx, { player, words }) => {
   
   console.log(`[SERVER DATA] Player ${player.id} sessionId: ${sessionId}, category: ${category}, agentName: ${agentName}`);
   
-  const pastWords = player.round.get("words") || [];
+  // Use words from callback parameter (fresh data that triggered this callback)
+  const pastWords = words;
   console.log(`[SERVER WORDS ARRAY] Player ${player.id} pastWords:`, pastWords.map(w => `${w.source}:"${w.text}"`));
   console.log(`[SERVER WORDS ARRAY] Player ${player.id} pastWords.length: ${pastWords.length}`);
   
