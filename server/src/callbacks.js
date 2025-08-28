@@ -3,10 +3,6 @@ import { SFTClient } from "./utils/SFTClient";
 
 export const Empirica = new ClassicListenersCollector();
 
-// Changes on server side are synchronous
-// This means if a callback is blocking, it will delay the processing of other callbacks for other players!
-// Use flush to avoid delays!
-
 const categoryMap = {
   A: "animals",
   S: "supermarket items",
@@ -213,7 +209,6 @@ Empirica.onGameStart(({ game }) => {
   game.set("taskIndex", taskIndex);
   game.set("taskCategory", taskCategory);
   game.set("currentRoundIndex", 0);  // Initialize round counter
-  game.set("hhRoundIndex", 0);       // Initialize HH round counter
 
   players.forEach((player) => {
     player.set("slowResponsePenalties", 0);
@@ -284,40 +279,9 @@ Empirica.onRoundStart(({ round }) => {
       player.round.set("partner", "AI");
     }
 
-    // Set roles for HH interleaved rounds
-    if (taskIndex[currentRoundIndex] === "HHInterleaved") {
-      const hhRoundIndex = game.get("hhRoundIndex") || 0;
-      
-      console.log(`Role assignment debug:
-        Round name: ${round.get("name")}
-        HH Round Index: ${hhRoundIndex}
-        Player Array Index: ${playerArrayIndex}
-        Current round index: ${currentRoundIndex}
-      `);
-
-      // Set role based on hhRoundIndex (alternating)
-      const mainRole = hhRoundIndex % 2 === 0 ? 
-        (playerArrayIndex === 0 ? "main" : "helper") : 
-        (playerArrayIndex === 0 ? "helper" : "main");
-      
-      player.round.set("role", mainRole);
-      player.set("role", mainRole);
-      
-      // Only increment hhRoundIndex after processing all players
-      if (playerArrayIndex === players.length - 1) {
-        game.set("hhRoundIndex", hhRoundIndex + 1);
-      }
-      
-      console.log(`Final role assignment:
-        Player ID: ${player.id}
-        Player Array Index: ${playerArrayIndex}
-        HH Round: ${hhRoundIndex}
-        Round Name: ${round.get("name")}
-        Role: ${mainRole}
-      `);
-    }
   });
 
+  // Set random first player for HHInterleaved rounds
   if (round.get("name").includes("Interleaved")) {
     const firstPlayerId = players[Math.floor(Math.random() * players.length)].id;
     round.set("currentTurnPlayerId", firstPlayerId);
@@ -339,11 +303,8 @@ Empirica.onStageStart(({ stage }) => {
   const treatment = game.get("treatment");
   console.log(`Stage ${stageName} started for game ${game.id}. Treatment:`, treatment);
   
-  // Initialize turn states for VerbalFluencyCollab - simple approach
-  if (stageName === "VerbalFluencyCollab") {
-    console.log(`[VerbalFluencyCollab] Stage started - players can begin`);
-  }
-  // Note: HHInterleaved turn state is initialized in onRoundStart callback
+  // HHInterleaved turn state is initialized in onRoundStart callback
+  // VerbalFluencyCollab turns are managed in the words callback
 });
 
 Empirica.onStageEnded(({ stage }) => {
@@ -425,8 +386,7 @@ Empirica.onGameEnded(({ game }) => {
   });
 });
 
-// Words-triggered API call - only for VerbalFluencyCollab stage user words  
-// Listen to player.words changes (then copy to player.round.words for compatibility)
+// Words-triggered API call - only for VerbalFluencyCollab stage  
 Empirica.on("player", "words", (ctx, { player, words }) => {
   const stageName = player.currentStage?.get("name");
   
@@ -521,7 +481,7 @@ Empirica.on("player", "words", (ctx, { player, words }) => {
           responseText = response.trim();
           console.log(`[SERVER API RESPONSE] Player ${player.id} trimmed response: "${responseText}"`);
           
-          // Check for duplicates
+          // Check for duplicate words
           const normalizedResponse = normalizeString(responseText);
           console.log(`[SERVER DUPLICATE CHECK] Player ${player.id} normalized response: "${normalizedResponse}"`);
           
@@ -635,14 +595,11 @@ Empirica.on("player", "words", (ctx, { player, words }) => {
         .finally(() => {
           console.log(`[SERVER CLEANUP] Player ${player.id} starting cleanup`);
           
-          // Always clean up
-          // Note: apiTrigger cleanup removed since we now use words trigger
-          
           console.log(`[SERVER CLEANUP] Player ${player.id} setting apiProcessing = false`);
           player.round.set("apiProcessing", false);
           
           console.log(`[SERVER CLEANUP] Player ${player.id} flushing cleanup flags`);
-          Empirica.flush(); // Flush cleanup flags to prevent duplicate calls
+          Empirica.flush();
           
           console.log(`[SERVER COMPLETE] Player ${player.id} processing complete`);
         });
@@ -721,6 +678,5 @@ Empirica.on("round", "words", (ctx, { round }) => {
     validateHHTurns();
   }
   
-  // Skip VerbalFluencyCollab validation - let client handle it
 });
 
