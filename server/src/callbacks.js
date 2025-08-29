@@ -145,10 +145,10 @@ function setupRounds(game, treatment) {
   const { cueType, interOrder } = treatment;
   const players = game.players;
   
-  // // Add AsyncTest as the first round for testing callback patterns
-  // const testRound = game.addRound({ name: "AsyncTestRound" });
-  // testRound.addStage({ name: "AsyncTest", duration: 60 }); // 1 minute for testing
-  // console.log("AsyncTest round created as first round");
+  // // Add TimestampTest as the first round for testing timestamp anomalies
+  // const timestampTestRound = game.addRound({ name: "TimestampTestRound" });
+  // timestampTestRound.addStage({ name: "TimestampTest", duration: 300 }); // 5 minutes for testing
+  // console.log("TimestampTest round created as first round");
   
   const [firstTask, secondTask] = interOrder.split('_');
   
@@ -398,8 +398,24 @@ Empirica.on("player", "words", (ctx, { player, words }) => {
   // Use words from callback parameter (recommended by Empirica docs)
   if (!words) words = [];
   
+  // Add server timestamp to the last word if it's a user word without serverTimestamp
+  let wordsToSave = words;
+  if (words.length > 0) {
+    const lastWordIndex = words.length - 1;
+    const lastWord = words[lastWordIndex];
+    
+    if (lastWord.source === 'user' && !lastWord.timestamp) {
+      wordsToSave = [...words];
+      wordsToSave[lastWordIndex] = {
+        ...lastWord,
+        timestamp: Date.now()
+      };
+      console.log(`[SERVER TIMESTAMP] Player ${player.id} added server timestamp to user word "${lastWord.text}"`);
+    }
+  }
+  
   // Copy to player.round.words for compatibility with other code
-  player.round.set("words", words);
+  player.round.set("words", wordsToSave);
 
   // Only trigger API if last word is from user
   if (words.length === 0) return;
@@ -643,16 +659,93 @@ Empirica.on("player", "requestTimestamp", (ctx, { player }) => {
   });
 });
 
-// Simplified turn validation - only for HHInterleaved, not VerbalFluencyCollab
-Empirica.on("round", "words", (ctx, { round }) => {
-  const stageName = round.currentStage?.get("name");
+// Test callback for timestamp anomaly investigation
+// Empirica.on("player", "testTimestampRequest", (ctx, { player }) => {
+//   console.log(`[TEST TIMESTAMP] Player ${player.id} requested test timestamp`);
+//   
+//   // Non-blocking async function to simulate AI response timing
+//   async function createTestResponse() {
+//     try {
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} starting test response creation`);
+//       
+//       // Simulate variable API delay like the real AI calls
+//       const delay = Math.random() * 1000 + 500; // 500-1500ms delay
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} simulating ${delay}ms delay`);
+//       
+//       await new Promise(resolve => setTimeout(resolve, delay));
+//       
+//       // Create server timestamp (like responseTime = Date.now() in the real callback)
+//       const serverTimestamp = Date.now();
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} server timestamp created: ${serverTimestamp}`);
+//       
+//       // Create test response object (like apiResponseObj in real callback)
+//       const testResponseObj = {
+//         text: `test-response-${Date.now()}`,
+//         timestamp: serverTimestamp,
+//         delay: delay,
+//         testType: 'timestamp-investigation'
+//       };
+//       
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} setting testResponse:`, testResponseObj);
+//       player.stage.set("testResponse", testResponseObj);
+//       
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} flushing test response`);
+//       Empirica.flush();
+//       console.log(`[TEST TIMESTAMP] Player ${player.id} test response complete`);
+//       
+//     } catch (error) {
+//       console.error(`[TEST TIMESTAMP ERROR] Player ${player.id}:`, error);
+//       player.stage.set("testResponseError", {
+//         error: error.message,
+//         timestamp: Date.now()
+//       });
+//       Empirica.flush();
+//     }
+//   }
+//   
+//   // Start background processing (non-blocking)
+//   createTestResponse();
+// });
+
+// HHInterleaved round words callback - add server timestamps and validate turns
+Empirica.on("round", "words", (ctx, { round, words }) => {
+
+  const stageName = round.currentGame.currentStage?.get("name");
+  console.log(`[HH CALLBACK] Processing words for round ${round.id} in stage ${stageName}`);
   
-  // Only validate HHInterleaved turns (human-human)
+  // Only process HHInterleaved words (human-human)
   if (stageName === "HHInterleaved") {
-    function validateHHTurns() {
-      const words = round.get("words") || [];
+    // Use words from callback parameter (recommended by Empirica docs)
+    if (!words) words = [];
+    
+    // Add server timestamp to the last word if it doesn't have one
+    if (words.length > 0) {
+      const lastWordIndex = words.length - 1;
+      const lastWord = words[lastWordIndex];
+
+      console.log(`[HH DEBUG] Callback triggered, lastWord:`, lastWord);
+      console.log(`[HH DEBUG] lastWord.timestamp:`, lastWord.timestamp);
+      console.log(`[HH DEBUG] !lastWord.timestamp:`, !lastWord.timestamp);
+
       
-      // Check for consecutive words from same player
+      if (!lastWord.timestamp) {
+        const wordsWithServerTimestamp = [...words];
+        wordsWithServerTimestamp[lastWordIndex] = {
+          ...lastWord,
+          timestamp: Date.now()
+        };
+        
+        // Update the round words with server timestamp
+        round.set("words", wordsWithServerTimestamp);
+        console.log(`[HH SERVER TIMESTAMP] Player ${lastWord.player} added server timestamp to word "${lastWord.text}"`);
+        
+        // Use updated words for validation
+        words = wordsWithServerTimestamp;
+      }
+    }
+    
+    // Turn validation - check for consecutive words from same player
+    function validateHHTurns() {
       if (words.length >= 2) {
         const lastWord = words[words.length - 1];
         const secondLastWord = words[words.length - 2];

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { usePlayer, usePlayers, useRound, useStage, useStageTimer } from "@empirica/core/player/classic/react";
+import { usePlayer, usePlayers, useRound, useStage} from "@empirica/core/player/classic/react";
 import { Button } from "../components/Button";
 import { TimeProgressBar } from "../components/TimeProgressBar";
 
@@ -12,13 +12,12 @@ export function HHInterleaved() {
   const otherPlayer = players.find(p => p.id !== player.id);
   const isPlayerTurn = round.get("currentTurnPlayerId") === player.id;
   const stage = useStage();
-  const timer = useStageTimer();
+  // const timer = useStageTimer();
   const category = player.round.get("category");
   player.round.set("roundName", "InterleavedHH");
   const inputRef = useRef(null);
   const isSubmittingRef = useRef(false);
   const wordHistoryRef = useRef(null);
-  const previousWordCountRef = useRef(0);
 
   //State variable for progress bar
   const [showProgressBar, setShowProgressBar] = useState(false);
@@ -78,11 +77,11 @@ export function HHInterleaved() {
     });
   }, [round.get("currentTurnPlayerId")]);
 
-  // logging - Track server timestamp changes
-  useEffect(() => {
-    const timestamp = player.stage.get("serverTimestamp");
-    console.log(`[Player ${player.id}] Timestamp changed:`, timestamp);
-  }, [player.stage.get("serverTimestamp")]);
+  // // logging - Track server timestamp changes
+  // useEffect(() => {
+  //   const timestamp = player.stage.get("serverTimestamp");
+  //   console.log(`[Player ${player.id}] Timestamp changed:`, timestamp);
+  // }, [player.stage.get("serverTimestamp")]);
   
   // Update word display and score when words change
   useEffect(() => {
@@ -98,31 +97,31 @@ export function HHInterleaved() {
   // Track receive timestamps for words from other players
   useEffect(() => {
     const words = round.get("words") || [];
-    const previousWordCount = previousWordCountRef.current;
+    const lastProcessedIndex = player.round.get("lastProcessedWordIndex") || 0;
     
     // Check if new words were added
-    if (words.length > previousWordCount) {
-      const newWords = words.slice(previousWordCount);
+    if (words.length > lastProcessedIndex) {
+      const newWords = words.slice(lastProcessedIndex);
       const receiveTimestamps = { ...(player.round.get("wordReceiveTimestamps") || {}) };
       let hasNewReceiveTimestamps = false;
       
       // Process each new word
       newWords.forEach((word, index) => {
-        const wordIndex = previousWordCount + index;
+        const wordIndex = lastProcessedIndex + index;
         
         // Only timestamp words received from other players
         // Also verify the word has required properties to avoid processing incomplete data
-        if (word.player !== player.id && word.text && word.timestamp) {
-          const receiveTimestamp = getStageTimestamp();
+        if (word.player !== player.id && word.text && word.clientTimestamp) {
+          const receiveTimestamp = Date.now();
           receiveTimestamps[wordIndex] = {
             timestamp_received: receiveTimestamp,
             word_text: word.text,
             word_sender: word.player,
-            word_sent_timestamp: word.timestamp
+            word_sent_timestamp: word.clientTimestamp
           };
           hasNewReceiveTimestamps = true;
           
-          console.log(`[Player ${player.id}] Received word "${word.text}" at timestamp ${receiveTimestamp}ms`);
+          console.log(`[Player ${player.id}] Received word "${word.text}" at timestamp ${receiveTimestamp}`);
         }
       });
       
@@ -130,25 +129,14 @@ export function HHInterleaved() {
       if (hasNewReceiveTimestamps) {
         player.round.set("wordReceiveTimestamps", receiveTimestamps);
       }
+      
+      // Update the processed word count to persist across refreshes
+      player.round.set("lastProcessedWordIndex", words.length);
     }
-    
-    // Update the previous word count (always update to prevent drift)
-    previousWordCountRef.current = words.length;
   }, [round.get("words"), player.id]); 
 
 
-  function getStageTimestamp() {
-    if (!timer) {
-      throw new Error("Stage timer not available");
-    }
-    
-    const stageDuration = stage.get("duration") * 1000; // Convert to ms
-    const elapsedTime = stageDuration - timer.remaining;
-    
-    console.log(`[Player ${player.id}] Stage timer timestamp - elapsed: ${elapsedTime}ms`);
-    
-    return elapsedTime;
-  }
+  // Removed getStageTimestamp - was using unreliable stage timer
 
 
   async function handleSendWord() {
@@ -184,46 +172,44 @@ export function HHInterleaved() {
   
       console.log(`[Player ${player.id}] Starting word submission`);
   
-      const timestamp = getStageTimestamp();
-      if (timestamp < 0) {
-        throw new Error(`Invalid timestamp: ${timestamp}`);
-      }
+      // const timestamp = getStageTimestamp();
+      // if (timestamp < 0) {
+      //   throw new Error(`Invalid timestamp: ${timestamp}`);
+      // }
   
-      console.log(`[Player ${player.id}] Got stage timer timestamp: ${timestamp}ms`);
+      // console.log(`[Player ${player.id}] Got stage timer timestamp: ${timestamp}ms`);
       
-      const serverStartTime = stage.get("serverStartTime");
-      if (!serverStartTime) {
-        throw new Error("No server start time available");
-      }
+      // const serverStartTime = stage.get("serverStartTime");
+      // if (!serverStartTime) {
+      //   throw new Error("No server start time available");
+      // }
       
       const clientTimestamp = Date.now();
-      const clientRelativeTimestamp = clientTimestamp - serverStartTime;
+      // const clientRelativeTimestamp = clientTimestamp - serverStartTime;
   
       // Verify it's still our turn before submitting
       if (round.get("currentTurnPlayerId") !== player.id) {
         throw new Error("Turn changed during submission");
       }
 
-      // Check for slow response
+      // Check for slow response using clientTimestamp
+      const serverStartTime = stage.get("serverStartTime");
+      let responseDelay;
+      
       if (words.length > 0) {
+        // Inter-word delay: time since last word
         const lastWord = words[words.length - 1];
-        const responseDelay = timestamp - lastWord.timestamp;
-        if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
-          const delayPoints = Math.floor(responseDelay / 20000);
-          const currentPenalties = player.get("slowResponsePenalties") || 0;
-          player.set("slowResponsePenalties", currentPenalties + delayPoints);
-          console.log(`Slow response penalty applied: ${delayPoints} penalties`);
-        }
+        responseDelay = clientTimestamp - lastWord.clientTimestamp;
+      } else {
+        // First word delay: time since stage started
+        responseDelay = clientTimestamp - serverStartTime;
       }
-      //add penalty for slow first word too
-      if (words.length === 0) {
-        const responseDelay = timestamp;
-        if (responseDelay > 20000) { // 10 seconds in milliseconds -> 20s
-          const delayPoints = Math.floor(responseDelay / 20000);
-          const currentPenalties = player.get("slowResponsePenalties") || 0;
-          player.set("slowResponsePenalties", currentPenalties + delayPoints);
-          console.log(`Slow response penalty applied to first word: ${delayPoints} penalties`);
-        }
+      
+      if (responseDelay > 20000) { // 20 seconds
+        const delayPoints = Math.floor(responseDelay / 20000);
+        const currentPenalties = player.get("slowResponsePenalties") || 0;
+        player.set("slowResponsePenalties", currentPenalties + delayPoints);
+        console.log(`Slow response penalty applied: ${delayPoints} penalties`);
       }
 
       // Reset the progress bar and add word to list 
@@ -232,9 +218,9 @@ export function HHInterleaved() {
       const updatedWords = [...words, {
         text: wordToSubmit,
         player: player.id,
-        timestamp: timestamp,
         clientTimestamp: clientTimestamp,
-        clientRelativeTimestamp: clientRelativeTimestamp,
+        // timestamp: timestamp,
+        // clientRelativeTimestamp: clientRelativeTimestamp,
       }];
   
       // Update words and change turn
@@ -243,9 +229,9 @@ export function HHInterleaved() {
   
       console.log(`[Player ${player.id}] Word submission complete:`, {
         word: wordToSubmit,
-        timestamp,
+        // timestamp,
         clientTimestamp,
-        clientRelativeTimestamp,
+        // clientRelativeTimestamp,
         newTurn: otherPlayer.id
       });
 

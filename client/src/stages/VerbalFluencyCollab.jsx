@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { usePlayer, useRound, useStage, useStageTimer } from "@empirica/core/player/classic/react";
+import { usePlayer, useRound, useStage} from "@empirica/core/player/classic/react";
 import { Button } from "../components/Button";
 import { TimeProgressBar } from "../components/TimeProgressBar";
 
@@ -10,7 +10,7 @@ export function VerbalFluencyCollab() {
   const player = usePlayer();
   const round = useRound();
   const stage = useStage();
-  const timer = useStageTimer();
+  // const timer = useStageTimer();
   const category = player.round.get("category");
   const inputRef = useRef(null);
   const wordHistoryRef = useRef(null);
@@ -51,17 +51,7 @@ export function VerbalFluencyCollab() {
     }
   }, [player.round.get("words")]);
   
-  // Get a timestamp relative to stage start using stage timer
-  function getRelativeTimestamp() {
-    if (!timer) {
-      throw new Error("Stage timer not available");
-    }
-    
-    const stageDuration = stage.get("duration") * 1000; // Convert to ms
-    const elapsedTime = stageDuration - timer.remaining;
-    
-    return Math.max(0, elapsedTime);
-  }
+  // Removed getRelativeTimestamp - was using unreliable stage timer
 
   //Show progress bar in first render
   useEffect(() => {
@@ -207,21 +197,18 @@ export function VerbalFluencyCollab() {
       console.log(`[CLIENT SUBMIT APPROVED] Player ${player.id} all checks passed for "${wordToSubmit}"`);
       
       // Calculate timestamps and penalties
-      const timestamp = getRelativeTimestamp();
       const clientTimestamp = Date.now();
-      const serverStartTime = stage.get("serverStartTime");
       
-      console.log(`[CLIENT TIMING] Player ${player.id} timestamps - relative: ${timestamp}, client: ${clientTimestamp}, server start: ${serverStartTime}`);
+      console.log(`[CLIENT TIMING] Player ${player.id} client timestamp: ${clientTimestamp}`);
       
-      applySlowResponsePenalty(words, timestamp);
+      applySlowResponsePenalty(words, clientTimestamp);
       
       // Add word to array
       const newWord = {
         text: wordToSubmit,
         source: 'user',
-        timestamp,
         clientTimestamp,
-        clientRelativeTimestamp: clientTimestamp - serverStartTime,
+        // timestamp will be added by server
       };
       
       console.log(`[CLIENT NEW WORD] Player ${player.id} creating word object:`, newWord);
@@ -250,13 +237,18 @@ export function VerbalFluencyCollab() {
     }
   }
   
-  function applySlowResponsePenalty(words, currentTimestamp) {
+  function applySlowResponsePenalty(words, currentClientTimestamp) {
     const PENALTY_THRESHOLD = 20000; // 20 seconds
-    let responseDelay = currentTimestamp; // For first word
+    const serverStartTime = stage.get("serverStartTime");
+    let responseDelay;
     
     if (words.length > 0) {
+      // Inter-word delay: time since last word
       const lastWord = words[words.length - 1];
-      responseDelay = currentTimestamp - lastWord.timestamp;
+      responseDelay = currentClientTimestamp - lastWord.clientTimestamp;
+    } else {
+      // First word delay: time since stage started
+      responseDelay = currentClientTimestamp - serverStartTime;
     }
     
     if (responseDelay > PENALTY_THRESHOLD) {
@@ -275,18 +267,14 @@ export function VerbalFluencyCollab() {
   function handleAIResponse(response) {
     console.log(`[AI Response] Player ${player.id}: ${response.text}`);
     
-    const timestamp = getRelativeTimestamp();
     const clientTimestamp = Date.now();
-    const serverStartTime = stage.get("serverStartTime");
 
     const words = player.round.get("words") || [];
     const newAIWord = {
       text: response.text,
       source: 'ai',
-      timestamp,
+      timestamp: response.timestamp,
       clientTimestamp,
-      clientRelativeTimestamp: clientTimestamp - serverStartTime,
-      serverTimestamp: response.timestamp,
       apiLatency: response.apiLatency,
     };
 

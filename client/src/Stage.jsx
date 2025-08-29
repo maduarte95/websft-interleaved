@@ -10,7 +10,7 @@ import { VerbalFluencyCollab } from "./stages/VerbalFluencyCollab";
 import { HHInterleaved } from "./stages/HHInterleaved";
 import { SwitchesId } from "./stages/SwitchesId";
 import { Labelling } from "./stages/Labelling";
-import { TimestampTest } from "./stages/TimestampTest";
+// import { TimestampTestRealTiming } from "./stages/TimestampTestRealTiming";
 // import { AsyncTest } from "./stages/AsyncTest";  // Testing component - uncomment to test callback patterns
 
 export function Stage() {
@@ -31,17 +31,17 @@ export function Stage() {
   }
 
   switch (round.get("name")) {
-    case "TimestampTestRound":
-      switch (stage.get("name")) {
-        case "TimestampTest":
-          return <TimestampTest />;
-        default:
-          return <Loading />;
-      }
+    // case "TimestampTestRound":
+    //   switch (stage.get("name")) {
+    //     case "TimestampTest":
+    //       return <TimestampTestRealTiming />;
+    //     default:
+    //       return <Loading />;
+    //   }
     // case "AsyncTestRound":
     //   switch (stage.get("name")) {
     //     case "AsyncTest":
-    //       return <AsyncTest />;
+    //       return <TimestampTest />;
     //     default:
     //       return <Loading />;
     //   }
