@@ -153,7 +153,7 @@ function setupRounds(game, treatment) {
   const [firstTask, secondTask] = interOrder.split('_');
   
   const interleavedRound1 = game.addRound({ name: "Interleaved1" });
-  interleavedRound1.addStage({ name: firstTask.startsWith('h') ? "HHInterleaved" : "VerbalFluencyCollab", duration: 180 }); //180
+  interleavedRound1.addStage({ name: firstTask.startsWith('h') ? "HHInterleaved" : "VerbalFluencyCollab", duration: 360 }); //180
   interleavedRound1.addStage({ name: "SwitchesId", duration: 300 });
   interleavedRound1.addStage({ name: "Labelling", duration: 300 });
   interleavedRound1.set("category", categoryMap[firstTask.slice(-1)]);
@@ -161,7 +161,7 @@ function setupRounds(game, treatment) {
   interleavedRound1.set("treatment", treatment);  // Set treatment for the round
 
   const interleavedRound2 = game.addRound({ name: "Interleaved2" });
-  interleavedRound2.addStage({ name: secondTask.startsWith('h') ? "HHInterleaved" : "VerbalFluencyCollab", duration: 180 });
+  interleavedRound2.addStage({ name: secondTask.startsWith('h') ? "HHInterleaved" : "VerbalFluencyCollab", duration: 360 });
   interleavedRound2.addStage({ name: "SwitchesId", duration: 300 });
   interleavedRound2.addStage({ name: "Labelling", duration: 300 });
   interleavedRound2.set("category", categoryMap[secondTask.slice(-1)]);

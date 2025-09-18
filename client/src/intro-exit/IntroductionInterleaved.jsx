@@ -32,7 +32,7 @@ export function IntroductionInterleaved({ next }) {
           <p className="text-base font-bold mb-3">Overview:</p>
           <ul className="list-disc pl-5 space-y-2">
             <li>This task consists of <strong>two rounds of three diffferent stages</strong></li>
-            <li>In the <strong>first stage (item naming task)</strong> you will be asked to collaborate with a partner to name as many items as you can from a selected category within 3 minutes</li>
+            <li>In the <strong>first stage (item naming task)</strong> you will be asked to collaborate with a partner to name as many items as you can from a selected category within 6 minutes</li>
             <li>You and your partner will receive a <strong>bonus payment for every item</strong> you name in this step, with a <strong>penalty for slow responses</strong></li>
             <li>You will then be asked to <strong>group together similar words</strong> you think may be related through a common theme and to <strong>label the groups of related words</strong> you've identified</li>
             <li>In the second round, you will collaborate with a different partner and name words from a different category. <strong>Your completion code will be available after you complete the two rounds</strong></li>
@@ -50,12 +50,14 @@ export function IntroductionInterleaved({ next }) {
           <iframe 
             loading="lazy" 
             style={{position: "absolute", width: "100%", height: "100%", top: 0, left: 0, border: "none", padding: 0, margin: 0}}
-            src="https://www.canva.com/design/DAGwicL42b4/M5DzaPD6PHo3AUQub28f7A/watch?embed"
+            src="https://www.canva.com/design/DAGzSK1L2H8/wxiLUnDtHMZsKZNndoZ63A/watch?embed"
             allowFullScreen={true}
             allow="fullscreen"
             title="Instructions - Item Naming Task"
           ></iframe>
         </div>
+
+        {/* "https://www.canva.com/design/DAGwicL42b4/M5DzaPD6PHo3AUQub28f7A/watch?embed" */}
 
         <div className="bg-gray-50 p-6 rounded-lg">
           <p className="text-base font-bold mb-3">Item Naming: Display and Scoring:</p>
@@ -66,7 +68,7 @@ export function IntroductionInterleaved({ next }) {
             <li>Score is based on the total number of unique items submitted by you and your partner</li>
             <li>The screen will display all items named and the current score</li>
             <li>Pay attention to the start of your turn: once your partner submits a word, an additional 20-second timer will be displayed. A penalty for slow responses will be applied to your bonus every 20 seconds</li>
-            <li>Continue alternating turns until the time runs out (3 minutes)</li>
+            <li>Continue alternating turns until the time runs out (6 minutes)</li>
           </ul>
         </div>
 

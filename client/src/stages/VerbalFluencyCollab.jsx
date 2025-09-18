@@ -132,6 +132,7 @@ export function VerbalFluencyCollab() {
       setTimeout(() => setApiError(null), 5000);
     }
   }, [player.stage.get("apiError")]);
+
   function handleSendWord() {
     const wordToSubmit = currentWord.trim();
     console.log(`[CLIENT SUBMIT START] Player ${player.id} attempting: "${wordToSubmit}"`);

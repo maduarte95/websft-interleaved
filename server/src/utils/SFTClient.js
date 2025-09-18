@@ -19,7 +19,7 @@ export class SFTClient {
             const timeoutId = setTimeout(() => {
                 console.error(`SFTClient - Request timeout after 60 seconds`);
                 controller.abort();
-            }, 60000); // 60 second timeout
+            }, 60000); // 60 second timeout  60000
 
             const response = await fetch(`${this.baseUrl}/process_message`, {
                 method: 'POST',
